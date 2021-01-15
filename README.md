@@ -8,7 +8,7 @@
 ## Features
 - IM(Interface-Model) architecture
 - RSA
-- Thread safety
+- Thread safety, Request isolation
 - No entity and repository, EntityManager instead
 - Run Fast, No Warn, No Error
 - The last but not least, You can write your own code in the way you are familiar with Spring Boot, regardless of any of the above features
