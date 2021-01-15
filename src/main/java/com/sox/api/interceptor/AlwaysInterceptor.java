@@ -94,6 +94,7 @@ public class AlwaysInterceptor implements HandlerInterceptor {
     @Override
     public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView mav) {
         api.req.remove();
+        api.res.remove();
 
         System.out.println("Interceptor cost: " + (System.currentTimeMillis() - start) + "ms");
     }
