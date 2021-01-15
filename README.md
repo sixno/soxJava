@@ -3,9 +3,9 @@
 ---
 
 ## introduce
-Base on Spring Boot
-Less is More
-Work for Independent Developer
+1. Base on Spring Boot
+2. Less is More
+3. Work for Independent Developer
 
 ## Features
 - IM(Interface-Model) architecture
@@ -19,9 +19,9 @@ Work for Independent Developer
 ---
 
 ## 简介
-基于Spring Boot
-敏捷开发
-为独立开发者服务
+1. 基于Spring Boot
+2. 敏捷开发
+3. 为独立开发者服务
 
 ## 特性
 - 接口-模型两层架构，取代传统MVC架构
