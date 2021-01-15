@@ -15,8 +15,8 @@ import java.util.Objects;
 
 @Service
 public class Api {
-    private final ThreadLocal<Map<String, Object>> req = new ThreadLocal<>();
-    private final ThreadLocal<Map<String, Object>> res = new ThreadLocal<>();
+    public final ThreadLocal<Map<String, Object>> req = new ThreadLocal<>();
+    public final ThreadLocal<Map<String, Object>> res = new ThreadLocal<>();
 
     public String get(String key) {
         HttpServletRequest request = ((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getRequest();
@@ -25,10 +25,8 @@ public class Api {
     }
 
     public Map<String, Object> json() {
-        Map<String, Object> json = req.get();
-
-        if (json == null) {
-            json = new HashMap<>();
+        if (req.get() == null) {
+            req.set(new HashMap<>());
 
             HttpServletRequest request = ((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getRequest();
 
@@ -43,15 +41,13 @@ public class Api {
                     json_str.append(line);
                 }
 
-                json = JSONObject.parseObject(json_str.toString());
+                req.set(JSONObject.parseObject(json_str.toString()));
             } catch (IOException e) {
                 e.printStackTrace();
             }
-
-            req.set(json);
         }
 
-        return json;
+        return req.get();
     }
 
     public String json(String key, Object... def) {
@@ -77,8 +73,9 @@ public class Api {
         if (res.get() == null) {
             res.set(new HashMap<>());
 
-            res.get().put("out", "1");
+            res.get().put("out", "");
             res.get().put("msg", "");
+            res.get().put("err", "");
 
             res.get().put("data", "");
             res.get().put("code", "");

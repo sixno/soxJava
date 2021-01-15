@@ -63,10 +63,10 @@ public class AlwaysInterceptor implements HandlerInterceptor {
             }
 
             // 权限拦截
-            CheckAuth  checkAuth  = handlerMethod.getMethod().getAnnotation(CheckAuth.class);
+            CheckAuth checkAuth = handlerMethod.getMethod().getAnnotation(CheckAuth.class);
 
             if (checkAuth == null) {
-                checkAuth  = handlerMethod.getMethod().getDeclaringClass().getAnnotation(CheckAuth.class);
+                checkAuth = handlerMethod.getMethod().getDeclaringClass().getAnnotation(CheckAuth.class);
             }
 
             if (checkAuth != null) {
@@ -75,10 +75,10 @@ public class AlwaysInterceptor implements HandlerInterceptor {
                     String value = checkAuth.value();
 
                     if (!com.check_auth(index, value)) {
-                        api.set("out","0");
-                        api.set("msg","您权限不够");
+                        api.set("out", "0");
+                        api.set("msg", "您权限不够");
 
-                        api.set("code","1001");
+                        api.set("code", "1001");
 
                         api.output();
 
@@ -93,7 +93,9 @@ public class AlwaysInterceptor implements HandlerInterceptor {
 
     @Override
     public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView mav) {
-        System.out.println("Interceptor cost="+(System.currentTimeMillis() - start));
+        api.req.remove();
+
+        System.out.println("Interceptor cost: " + (System.currentTimeMillis() - start) + "ms");
     }
 
     @Override

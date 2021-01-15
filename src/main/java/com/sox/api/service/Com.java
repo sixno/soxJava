@@ -74,7 +74,7 @@ public class Com {
         return ip;
     }
 
-    public boolean isNumeric(String str) {
+    public boolean is_numeric(String str) {
         Pattern pattern = Pattern.compile("[0-9]*");
 
         Matcher isNum = pattern.matcher(str);
@@ -92,17 +92,18 @@ public class Com {
 
         try {
             md5 = MessageDigest.getInstance(hashType);
+
             md5.update(source.getBytes());
+
             for (byte b : md5.digest()) {
                 // 10进制转16进制，X 表示以十六进制形式输出，02 表示不足两位前面补0输出
                 sb.append(String.format("%02X", b));
             }
-            return sb.toString().toLowerCase();
         } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
         }
 
-        return "";
+        return sb.toString().toLowerCase();
     }
 
     public String md5(String source) {
