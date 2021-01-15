@@ -1,7 +1,5 @@
 # soxJava
 
----
-
 ## introduce
 1. Base on Spring Boot
 2. Less is More
