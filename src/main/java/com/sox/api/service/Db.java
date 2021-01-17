@@ -14,26 +14,28 @@ public class Db implements Cloneable{
     @PersistenceContext
     protected EntityManager em;
 
+    protected EntityManager tm;
+
     private final ThreadLocal<String> o_tbl = new ThreadLocal<>();
 
     public String table = "";
 
     public Db table(String tbl) {
-        this.o_tbl.set(tbl);
+        o_tbl.set(tbl);
 
         return this;
     }
 
     public String table() {
-        if (this.o_tbl.get() == null) {
-            return this.table;
+        if (o_tbl.get() == null) {
+            return table;
         } else {
-            return this.o_tbl.get();
+            return o_tbl.get();
         }
     }
 
     public void restore_table() {
-        if (this.o_tbl.get() != null) this.o_tbl.remove();
+        o_tbl.remove();
     }
 
     public String single(String sql) {
@@ -43,11 +45,49 @@ public class Db implements Cloneable{
 
         List<Object> resultList = nativeQuery.getResultList();
 
-        String result = resultList.get(0).toString();
+        String result = resultList.get(0) != null ? resultList.get(0).toString() : "";
 
         em.clear();
 
         return result;
+    }
+
+    public List<Map<String, String>> single_col(String sql) {
+        this.restore_table();
+
+        String col = "";
+        ArrayList<Map<String, String>> list = new ArrayList<>();
+
+        Pattern p = Pattern.compile("(?i)select (.*?) from");
+        Matcher m = p.matcher(sql);
+
+        if (m.find()) {
+            String col_str = m.group(1).trim();
+
+            String[] col_arr = col_str.split(",");
+
+            for (String s : col_arr) {
+                String[] col_arr_i = s.split(" |\\.");
+
+                col = col_arr_i[col_arr_i.length - 1].replace("`", "");
+            }
+        }
+
+        Query nativeQuery = em.createNativeQuery(sql);
+
+        List<Object> resultList = nativeQuery.getResultList();
+
+        if (resultList != null) {
+            for (Object resultItem : resultList) {
+                Map<String, String> objectMap = new HashMap<>();
+
+                objectMap.put(col, resultItem.toString());
+
+                list.add(objectMap);
+            }
+        }
+
+        return list;
     }
 
     public List<Map<String, String>> result(String sql) {
@@ -70,6 +110,8 @@ public class Db implements Cloneable{
                 col.add(col_arr_i[col_arr_i.length - 1].replace("`", ""));
             }
         }
+
+        if (col.size() == 1) return this.single_col(sql);
 
         Query nativeQuery = em.createNativeQuery(sql);
 
@@ -106,19 +148,26 @@ public class Db implements Cloneable{
             m_count++;
         }
 
-        Query nativeQuery = em.createNativeQuery(sql);
+        // 为了手动开启事务，必须新建一个entityManager实例，否则报错共享实例不能手动开启事务
+        if(tm == null) tm = em.getEntityManagerFactory().createEntityManager();
+
+        Query nativeQuery = tm.createNativeQuery(sql);
+
+        tm.getTransaction().begin();
 
         int result = nativeQuery.executeUpdate();
 
+        tm.getTransaction().commit();
+
         if (sql.indexOf("INSERT INTO") == 0 && m_count == 2) {
-            nativeQuery = em.createNativeQuery("SELECT @@IDENTITY AS 'Identity'");
+            nativeQuery = tm.createNativeQuery("SELECT @@IDENTITY AS 'Identity'");
 
             List<Object> id = nativeQuery.getResultList();
 
             int_id = Integer.parseInt(id.get(0).toString());
         }
 
-        em.clear();
+        tm.clear();
 
         if (sql.indexOf("INSERT INTO") == 0 && m_count == 2) {
             return result > 0 ? (int_id > 0 ? int_id : result) : result;
@@ -424,11 +473,27 @@ public class Db implements Cloneable{
             }
         }
 
-        sql += this.where(map);
+        String where = this.where(map);
+
+        sql += where.equals("") ? "FORCE INDEX(PRIMARY)" : where;
 
         String result = this.single(sql);
 
         return Integer.parseInt(result);
+    }
+
+    public List<Map<String, Object>> list_count(Map<String, Object> map) {
+        int count = this.count(map);
+
+        List<Map<String, Object>> list = new ArrayList<>();
+
+        Map<String, Object> count_map = new HashMap<>();
+
+        count_map.put("count", count);
+
+        list.add(count_map);
+
+        return list;
     }
 
     public List<Map<String, String>> read(Map<String, Object> map) {
@@ -558,11 +623,11 @@ public class Db implements Cloneable{
     }
 
     public Map<String, String> find(Map<String, Object> map) {
-        if (map.get("#limit") == null) map.put("#limit", "1,0");
+        map.putIfAbsent("#limit", "1,0");
 
-        List list = this.read(map);
+        List<Map<String, String>> list = this.read(map);
 
-        return list.size() == 0 ? null : (Map<String, String>) list.get(0);
+        return list.size() == 0 ? new HashMap<>() : list.get(0);
     }
 
     public Map<String, String> find(String field, String id) {
@@ -583,6 +648,30 @@ public class Db implements Cloneable{
         return this.find(map);
     }
 
+    public String find(String field) {
+        Map<String, Object> map = new HashMap<>();
+
+        String[] arr = field.split("#");
+
+        map.put("#field", arr[0]);
+
+        if (!arr[1].contains(":")) {
+            map.put("id", arr[1]);
+        } else {
+            String[] arr_1 = arr[1].split(":");
+
+            map.put(arr_1[0], arr_1[1]);
+        }
+
+        Map<String, String> item = this.find(map);
+
+        for (String col : item.keySet()) {
+            return item.get(col);
+        }
+
+        return "";
+    }
+
     public int create(Map<String, String> data) {
         String sql = "INSERT INTO `" + this.table() + "` ";
 
@@ -601,7 +690,7 @@ public class Db implements Cloneable{
         return this.action(sql);
     }
 
-    public int create(List<Map> list) {
+    public int create(List<Map<String, String>> list) {
         String sql = "INSERT IGNORE INTO `" + this.table() + "` ";
 
         String field = "";
@@ -629,6 +718,12 @@ public class Db implements Cloneable{
     }
 
     public int update(Map<String, Object> where, Map<String, String> data) {
+        if (data.size() == 0) {
+            this.restore_table();
+
+            return 0;
+        }
+
         String sql = "UPDATE `" + this.table() + "` SET ";
 
         Set<String> keys = data.keySet();
@@ -641,12 +736,10 @@ public class Db implements Cloneable{
 
         sql += this.where(where);
 
-        int result = this.action(sql);
-
-        return result;
+        return this.action(sql);
     }
 
-    public int update(String id,Map<String, String> data) {
+    public int update(String id, Map<String, String> data) {
         Map<String, Object> where = new HashMap<>();
 
         where.put("id", id);
@@ -654,20 +747,55 @@ public class Db implements Cloneable{
         return this.update(where, data);
     }
 
-    public int update(String id, String field, String... data_val) {
+    public int update(String id, String dv, Map<String, String> data) {
         Map<String, Object> where = new HashMap<>();
 
-        where.put("id", id);
+        where.put(id, dv);
+
+        return this.update(where, data);
+    }
+
+    public int update(Map<String, String> data, String... wv) {
+        Map<String, Object> where = new HashMap<>();
+
+        for (int i = 0;i < wv.length;i += 2) {
+            where.put(wv[i], wv[i + 1]);
+        }
+
+        return this.update(where, data);
+    }
+
+    public int update(String id, String... dv) {
+        Map<String, Object> where = new HashMap<>();
+
+        if (dv.length % 2 == 0) {
+            where.put("id", id);
+        } else {
+            where.put(id, dv[0]);
+        }
 
         Map<String, String> data = new HashMap<>();
 
-        String[] data_key = field.split(",");
+        for (int i = dv.length % 2;i < dv.length;i += 2) {
+            data.put(dv[i], dv[i + 1]);
+        }
 
-        for (int i = 0;i < data_key.length;i++) {
-            if (i < data_val.length) {
-                data.put(data_key[i], data_val[i]);
+        return this.update(where, data);
+    }
+
+    public int update(int id, String... dv) {
+        Map<String, Object> where = new HashMap<>();
+        Map<String, String> data  = new HashMap<>();
+
+        int where_num = 0;
+
+        for (int i = 0;i < dv.length;i += 2) {
+            if(where_num < id) {
+                where.put(dv[i], dv[i + 1]);
+
+                where_num++;
             } else {
-                data.put(data_key[i], "");
+                data.put(dv[i], dv[i + 1]);
             }
         }
 

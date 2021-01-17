@@ -54,6 +54,38 @@ public class Api {
         return def.length == 0 ? this.json().getOrDefault(key, "").toString() : this.json().getOrDefault(key, def[0]).toString();
     }
 
+    public Map<String, Integer> line(int... size) {
+        Map<String, Integer> line = new HashMap<>();
+
+        String line_str = this.get("line");
+
+        if(line_str.equals("")) {
+            line.put("page", 1);
+            line.put("size", size.length == 0 ? 10 : size[0]);
+            line.put("rows", 0);
+        } else {
+            String[] line_arr = line_str.split(",");
+
+            line.put("page", Integer.parseInt(line_arr[0]));
+            line.put("size", Integer.parseInt(line_arr[1]));
+            line.put("rows", Integer.parseInt(line_arr[2]));
+        }
+
+        return line;
+    }
+
+    public void set_line(Map<String, Integer> line) {
+        String line_str = "";
+
+        line_str += (line.get("page") + 1) + "";
+
+        line_str += "," + line.get("size");
+
+        line_str += "," + line.get("rows");
+
+        this.set("line", line_str);
+    }
+
     public void output() {
         HttpServletResponse response = Objects.requireNonNull(((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getResponse());
 
@@ -80,7 +112,6 @@ public class Api {
             res.get().put("data", "");
             res.get().put("code", "");
             res.get().put("line", "");
-            res.get().put("rows", "");
         }
 
         return res.get();

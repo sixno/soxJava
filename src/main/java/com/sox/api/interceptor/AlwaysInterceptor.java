@@ -25,6 +25,7 @@ public class AlwaysInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         start = System.currentTimeMillis();
 
+        // 跨域设置，token暴露
         response.setHeader("Access-Control-Allow-Origin", request.getHeader("Origin"));
         response.setHeader("Access-Control-Allow-Credentials", "true");
         response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS");
@@ -96,7 +97,7 @@ public class AlwaysInterceptor implements HandlerInterceptor {
         api.req.remove();
         api.res.remove();
 
-        System.out.println("Interceptor cost: " + (System.currentTimeMillis() - start) + "ms");
+        System.out.println("Response time: " + (System.currentTimeMillis() - start) + "ms");
     }
 
     @Override

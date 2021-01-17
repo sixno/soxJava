@@ -128,6 +128,14 @@ public class Com {
         return this.salt_hash(str, "", length);
     }
 
+    public String salt_hash(String str, String salt) {
+        return this.salt_hash(str, salt, 8);
+    }
+
+    public String salt_hash(String str) {
+        return salt_hash(str, 8);
+    }
+
     public String base64_encode(String str) {
         byte[] bytes = str.getBytes();
 
@@ -162,6 +170,8 @@ public class Com {
     }
 
     public String rsa_decrypt(String str, String privateKey){
+        if (str.equals("")) return "";
+
         String outStr = "";
 
         byte[] inputByte = Base64.decodeBase64(str.getBytes(StandardCharsets.UTF_8));
@@ -187,7 +197,19 @@ public class Com {
     public String rsa_decrypt(String str) {
         String[] rsa = str.split(":");
 
+        if (rsa.length < 2) return "";
+
         return rsa_decrypt(rsa[1],pri_keys.getOrDefault(rsa[0], ""));
+    }
+
+    public String rsa_by_time(String str, int allow_time) {
+        String[] arr = this.rsa_decrypt(str).split("@");
+
+        if (arr.length < 2) return "";
+
+        if (Math.abs(Integer.parseInt(arr[1]) - this.time()) > allow_time) return "";
+
+        return arr[0];
     }
 
     public String str_rand(String str,int len) {

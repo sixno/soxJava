@@ -35,7 +35,29 @@ public class Check {
     public boolean min_length(String value, int num, String... other) {
         boolean current = value.length() >= num;
 
-        if (!current && queue) this.set_error("min_length", other, "信息长度不符");
+        if (!current && queue) this.set_error("min_length", other, "字符串长度不符");
+
+        result = queue ? result && current : current;
+
+        return result;
+    }
+
+    public boolean max_length(String value, int num, String... other) {
+        boolean current = value.length() <= num;
+
+        if (!current && queue) this.set_error("max_length", other, "字符串长度不符");
+
+        result = queue ? result && current : current;
+
+        return result;
+    }
+
+    public boolean exact_length(String value, int num, String... other) {
+        boolean current = value.length() == num;
+
+        if (!current && queue) this.set_error("exact_length", other, "字符串长度不符");
+
+        result = queue ? result && current : current;
 
         return result;
     }

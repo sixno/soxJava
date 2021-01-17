@@ -90,6 +90,18 @@ public class Img {
         }
     }
 
+    public String text_wm(String file, String text, int x, int y, int... color) {
+        return "";
+    }
+
+    public String img_wm(String file, String wm_file, int wm_size, String position, int wm_opacity) {
+        // position: top right bottom left center left-top right-top left-bottom right-bottom
+        // wm_size: %
+        // wm_opacity: %
+
+        return "";
+    }
+
     private static BufferedImage toBufferedImage(Image img) {
         int width  = img.getWidth(null);
         int height = img.getHeight(null);

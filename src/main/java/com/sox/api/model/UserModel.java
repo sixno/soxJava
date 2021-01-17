@@ -17,13 +17,16 @@ import java.util.*;
 public class UserModel {
     public Db db;
     public Com com;
+    public CodeModel code;
 
     @Autowired
-    public void UserServiceImpl(Db db, Com com) {
+    public void UserServiceImpl(Db db, Com com, CodeModel code) {
         this.db = db.clone();
         this.db.table = "sys_user";
 
         this.com = com;
+
+        this.code = code;
     }
 
     public String sess_seed = "fDS48V5G";
@@ -33,51 +36,46 @@ public class UserModel {
     public String field = "id,lv,sex,name,cname,avatar,company,dept,post,login_time,create_time,update_time,inviter,disabled,manual";
 
     public Map<String, Object> for_return(Map<String, String> data) {
-        if (data == null) return null;
-
         Map<String, Object> item = new HashMap<>();
 
-        Set<String> keys = data.keySet();
-
-        for (String key :keys){
+        for (String key : data.keySet()){
             item.put(key, data.get(key));
 
-            if (key.equals("sex")) {
-                switch (data.get("sex")) {
-                    case "1":
-                        item.put("sex_state", "男");
-                        break;
-                    case "2":
-                        item.put("sex_state", "女");
-                        break;
-                    default:
-                        item.put("sex_state", "未知");
-                        break;
-                }
-            }
+            if (key.equals("sex")) item.put("sex_state", code.state("sex", data.get(key), 0, "未知"));
         }
 
         return item;
     }
 
-    public List<Map<String, String>> list() {
-        Map<String, Object> map = new HashMap<>();
+    public List<Map<String, Object>> list(Map<String, Object> map, int... count) {
+        List<Map<String, Object>> list = new ArrayList<>();
 
-        map.put("#field", "id,name");
-        map.put("#order", "id,asc");
-        map.put("#limit", "5,0");
+        map.putIfAbsent("#field", field);
+        map.putIfAbsent("#order", "id,asc");
 
-        map.put("id >=", "10000005");
+        if (count.length == 1 && count[0] == 1) {
+            return this.db.list_count(map);
+        }
 
-        List<Map<String, String>> list = db.read(map);
+        for (Map<String, String> item: this.db.read(map)) {
+            list.add(this.for_return(item));
+        }
 
         return list;
     }
 
+    public int list_count(Map<String, Object> map) {
+        return Integer.parseInt(this.list(map, 1).get(0).get("count").toString());
+    }
+
     public Map<String, Object> item(String id) {
-        Map<String, String> data = this.db.find(this.field, id);
+        Map<String, String> data = this.db.find(field, id);
 
         return this.for_return(data);
+    }
+
+    public int mod(String user_id, Map<String, String> data) {
+        return this.db.update(user_id, data);
     }
 
     public Map<String, Object> login(String id,String remember) {
@@ -90,7 +88,7 @@ public class UserModel {
 
             this.set_session(id, time, remember);
 
-            this.db.update(id, new HashMap<String, String>(){ { put("login_time", time); } });
+            this.db.update(id, "login_time", time);
 
             user.put("login_time", time);
 
@@ -142,7 +140,7 @@ public class UserModel {
         map.put("#field", "auth_id,value");
         map.put("user_id", user_id);
 
-        List<Map<String, String>> auth_list = this.db.table(this.auth_table).read(map);
+        List<Map<String, String>> auth_list = this.db.table(auth_table).read(map);
 
         if (auth_list != null) {
             for (Map<String, String> auth_item : auth_list) {
