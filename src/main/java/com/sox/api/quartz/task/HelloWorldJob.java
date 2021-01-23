@@ -15,7 +15,7 @@ import java.util.Map;
 @Component
 public class HelloWorldJob implements Job{
     @Autowired
-    UserModel user_m;
+    private UserModel user_m;
 
     @Override
     public void execute(JobExecutionContext jobExecutionContext) {

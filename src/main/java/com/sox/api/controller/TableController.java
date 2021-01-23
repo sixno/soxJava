@@ -2,7 +2,6 @@ package com.sox.api.controller;
 
 import com.sox.api.interceptor.CheckLogin;
 import com.sox.api.service.Api;
-import com.sox.api.service.Com;
 import com.sox.api.service.Db;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -22,16 +21,15 @@ public class TableController {
     private Api api;
 
     @Autowired
-    private Com com;
-
-    @Autowired
     private Db db;
+
+    private final String allow_tables = "tyc_company,tyc_company_fl,tyc_company_sh";
 
     @RequestMapping("/list")
     public Map<String, Object> list() {
         String table = api.json("table");
 
-        if(!(",tyc_company,tyc_company_fl,tyc_person").contains("," + table + ",")) return api.err("当前数据表禁止查看");
+        if(!("," + allow_tables + ",").contains("," + table + ",")) return api.err("当前数据表禁止查看");
 
         Map<String, Integer> line = api.line(20);
 
@@ -44,6 +42,21 @@ public class TableController {
         List<Map<String, String>> list = db.table(table).read(map);
 
         api.set_line(line);
+
+        if (list.size() > 0) {
+            return api.put(list);
+        } else {
+            return api.err("没有数据");
+        }
+    }
+
+    @RequestMapping("/cols")
+    public Map<String, Object> cols() {
+        String table = api.json("table");
+
+        if(!("," + allow_tables + ",").contains("," + table + ",")) return api.err("当前数据表禁止查看");
+
+        List<Object[]> list = db.table(table).cols();
 
         if (list.size() > 0) {
             return api.put(list);

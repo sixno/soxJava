@@ -63,7 +63,12 @@ public class Api {
             line.put("page", 1);
             line.put("size", size.length == 0 ? 10 : size[0]);
             line.put("rows", 0);
-        } else {
+        } else if(line_str.equals("$")) {
+            line.put("page", 0);
+            line.put("size", size.length == 0 ? 10 : size[0]);
+            line.put("rows", 0);
+        }
+        else {
             String[] line_arr = line_str.split(",");
 
             line.put("page", Integer.parseInt(line_arr[0]));
@@ -130,53 +135,72 @@ public class Api {
         return res_copy;
     }
 
-    public Map<String, Object> msg(String str) {
+    public Map<String, Object> msg(String msg) {
         this.set("out", "1");
-        this.set("msg", str);
+        this.set("msg", msg);
 
         return this.out();
     }
 
-    public Map<String, Object> msg(String str,Object obj) {
+    public Map<String, Object> msg(String msg, Object data) {
         this.set("out", "1");
-        this.set("msg", str);
+        this.set("msg", msg);
 
-        this.set("data", obj);
+        this.set("data", data);
 
         return this.out();
     }
 
-    public Map<String, Object> put(Object obj) {
-        this.set("out", "1");
-        this.set("msg", "");
-
-        this.set("data", obj);
-
-        return this.out();
-    }
-
-    public Map<String, Object> put(Object obj,String str) {
+    public Map<String, Object> put(Object data) {
         this.set("out", "1");
         this.set("msg", "");
 
-        this.set("data", obj);
-        this.set("code", str);
+        this.set("data", data);
 
         return this.out();
     }
 
-    public Map<String, Object> err(String str) {
-        this.set("out", "0");
-        this.set("msg", str);
+    public Map<String, Object> put(String code, Object data) {
+        this.set("out", "1");
+        this.set("msg", "");
+
+        this.set("data", data);
+        this.set("code", code);
 
         return this.out();
     }
 
-    public Map<String, Object> err(String str,Object obj) {
-        this.set("out", "0");
-        this.set("msg", str);
+    public Map<String, Object> put(Object data, String msg) {
+        this.set("out", "1");
+        this.set("msg", msg);
 
-        this.set("data", obj);
+        this.set("data", data);
+
+        return this.out();
+    }
+
+    public Map<String, Object> put( Object data, String msg, String code) {
+        this.set("out", "1");
+        this.set("msg", msg);
+
+        this.set("data", data);
+        this.set("code", code);
+
+        return this.out();
+    }
+
+    public Map<String, Object> err(String err) {
+        this.set("out", "0");
+        this.set("msg", err);
+
+        return this.out();
+    }
+
+    public Map<String, Object> err(String err, Object data) {
+        this.set("out", "0");
+        this.set("msg", err);
+
+        this.set("data", data);
 
         return this.out();
     }

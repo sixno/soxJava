@@ -32,7 +32,7 @@ public class UserController {
         Check check = new Check();
 
         String user = api.json("user");
-        String pass = com.rsa_by_time(api.json("pass"), 30);
+        String pass = com.rsa_at_time(api.json("pass"), 30);
         String reme = api.json("reme", "0");
 
         check.required(user, "#账号");
@@ -43,7 +43,7 @@ public class UserController {
         if (check.result) {
             Map<String, String> db_user = user_m.db.find("id,password,disabled", "name", user);
 
-            if (db_user == null) return api.err("用户不存在");
+            if (db_user.size() == 0) return api.err("用户不存在");
 
             String password = com.salt_hash(pass, db_user.get("password"));
 
@@ -71,7 +71,7 @@ public class UserController {
         Map<String, Object> item = user_m.item(user_id);
 
         if (item.size() > 0) {
-            return api.put(item);
+            return api.put("0001", item);
         } else {
             return api.err("没有数据");
         }
@@ -99,6 +99,8 @@ public class UserController {
         }
 
         if (user_m.mod(user_id, data) > 0) {
+            if (user_id.equals(user_m.get_session("id"))) api.set("code", "0001");
+
             return api.put(user_m.item(user_id), "用户信息修改成功");
         } else {
             return api.err("没有信息被修改");
@@ -114,7 +116,7 @@ public class UserController {
         if(user_id.equals("")) {
             user_id = user_m.get_session("id");
 
-            String oldpword = com.rsa_by_time(api.json("oldpword"), 30);
+            String oldpword = com.rsa_at_time(api.json("oldpword"), 30);
             String password = user_m.db.find("password#" + user_id);
 
             if(!password.equals(com.salt_hash(oldpword, password))) return api.err("密码错误");

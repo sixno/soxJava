@@ -22,7 +22,7 @@ import java.text.DateFormat;
  * * To add JVM arguments In TOMCAT, modify catalina.bat/catalina.sh
  */
 @SuppressWarnings({"rawtypes", "unchecked", "serial", "UnusedReturnValue", "WeakerAccess", "unused", "JavaDoc"})
-public final class Curl {
+public class Curl {
     private static final String VERSION = "1.2.2";
     private static final String DEFAULT_USER_AGENT = "Java-Curl version " + VERSION + " by Rocks Wang(https://github.com/rockswang)";
     private static final Pattern ptnOptionName = Pattern.compile("-{1,2}[a-zA-Z][a-zA-Z0-9\\-.]*");

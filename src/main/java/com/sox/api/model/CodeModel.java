@@ -44,7 +44,7 @@ public class CodeModel {
                 map.put("level", level + "");
             }
 
-            List<Map<String, String>> state_list = this.db.read(map);
+            List<Map<String, String>> state_list = db.read(map);
 
             for (Map<String, String> item : state_list) {
                 state_item.put(item.get("value"), item.get("state"));

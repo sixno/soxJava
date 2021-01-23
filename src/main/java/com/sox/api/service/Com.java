@@ -148,7 +148,7 @@ public class Com {
         return new String(Base64.decodeBase64(bytes));
     }
 
-    public String rsa_encrypt( String str, String publicKey ) {
+    public String rsa_encrypt(String str, String publicKey) {
         String outStr = "";
 
         //base64编码的公钥
@@ -194,20 +194,36 @@ public class Com {
         return outStr;
     }
 
+    public String rsa_encrypt(String str) {
+        String[] rsa = str.split(":");
+
+        if (rsa.length < 2) return "";
+
+        return rsa_encrypt(str.substring(str.indexOf(":") + 1), pri_keys.getOrDefault(rsa[0], ""));
+    }
+
     public String rsa_decrypt(String str) {
         String[] rsa = str.split(":");
 
         if (rsa.length < 2) return "";
 
-        return rsa_decrypt(rsa[1],pri_keys.getOrDefault(rsa[0], ""));
+        return rsa_decrypt(rsa[1], pri_keys.getOrDefault(rsa[0], ""));
     }
 
-    public String rsa_by_time(String str, int allow_time) {
+    public String rsa_at_time(String str) {
+        return rsa_encrypt(str + "@" + this.time());
+    }
+
+    public String rsa_at_time(String str, String time) {
+        return rsa_encrypt(str + "@" + time);
+    }
+
+    public String rsa_at_time(String str, int allow_delay) {
         String[] arr = this.rsa_decrypt(str).split("@");
 
         if (arr.length < 2) return "";
 
-        if (Math.abs(Integer.parseInt(arr[1]) - this.time()) > allow_time) return "";
+        if (Math.abs(Integer.parseInt(arr[1]) - this.time()) > allow_delay) return "";
 
         return arr[0];
     }

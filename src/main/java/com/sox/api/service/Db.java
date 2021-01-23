@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import javax.persistence.Query;
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -137,6 +138,7 @@ public class Db implements Cloneable{
     public int action(String sql) {
         this.restore_table();
 
+        int result = 0;
         int int_id = 0;
 
         Pattern p = Pattern.compile("( \\()");
@@ -155,7 +157,11 @@ public class Db implements Cloneable{
 
         tm.getTransaction().begin();
 
-        int result = nativeQuery.executeUpdate();
+        try {
+            result = nativeQuery.executeUpdate();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         tm.getTransaction().commit();
 
@@ -482,6 +488,18 @@ public class Db implements Cloneable{
         return Integer.parseInt(result);
     }
 
+    public int count(String where_field, String where_value, String... more) {
+        Map<String, Object> where = new HashMap<>();
+
+        where.put(where_field, where_value);
+
+        for (int i = 0;i < more.length;i += 2) {
+            where.put(more[i], more[i + 1]);
+        }
+
+        return this.count(where);
+    }
+
     public List<Map<String, Object>> list_count(Map<String, Object> map) {
         int count = this.count(map);
 
@@ -496,6 +514,20 @@ public class Db implements Cloneable{
         return list;
     }
 
+    public List<Map<String, String>> count_list(Map<String, Object> map) {
+        int count = this.count(map);
+
+        List<Map<String, String>> list = new ArrayList<>();
+
+        Map<String, String> count_map = new HashMap<>();
+
+        count_map.put("count", new BigDecimal(count + "").toString());
+
+        list.add(count_map);
+
+        return list;
+    }
+
     public List<Map<String, String>> read(Map<String, Object> map) {
         String sql = "";
 
@@ -504,21 +536,28 @@ public class Db implements Cloneable{
         String order = map.getOrDefault("#order","").toString();
         String limit = map.getOrDefault("#limit","").toString();
 
-        if (!field.equals(""))
-        {
-            field = field.replace(".","`.`");
-            field = field.replaceAll("(?i) as ","` AS `");
-            field = field.replace(",", "`,`");
-            field = "`" + field + "`";
+        if (field.equals("") || field.equals("*")) {
+            List<Object[]> cols = this.cols(false);
 
-            field = field.replace("`*`","*");
+            field = "";
 
-            field = field.replaceAll("(?i)`distinct ", "DISTINCT `");
+            for (Object[] col : cols) {
+                field += col[0].toString() + ",";
+            }
 
-            sql = "SELECT " + field + " FROM `" + this.table() + "` ";
-        } else {
-            sql = "SELECT * FROM `" + this.table() + "` ";
+            field = field.substring(0, field.length() - 1);
         }
+
+        field = field.replace(".","`.`");
+        field = field.replaceAll("(?i) as ","` AS `");
+        field = field.replace(",", "`,`");
+        field = "`" + field + "`";
+
+        field = field.replace("`*`","*");
+
+        field = field.replaceAll("(?i)`distinct ", "DISTINCT `");
+
+        sql = "SELECT " + field + " FROM `" + this.table() + "` ";
 
         if (!unite.equals("")) {
             String[] unite_arr = unite.split(";");
@@ -541,17 +580,21 @@ public class Db implements Cloneable{
         sql += this.where(map);
 
         if (!order.equals("")) {
-            order = order.replace(" ", "");
-            order = order.replaceAll("(?i)asc", "ASC");
-            order = order.replaceAll("(?i)desc", "DESC");
-            order = order.replace(".", "`.`");
-            order = order.replace(",", "` ");
-            order = order.replace(";", "`,");
+            if (!order.startsWith("field(")) {
+                order = order.replace(" ", "");
+                order = order.replaceAll("(?i)asc", "ASC");
+                order = order.replaceAll("(?i)desc", "DESC");
+                order = order.replace(".", "`.`");
+                order = order.replace(",", "` ");
+                order = order.replace(";", "`,");
 
-            sql += "ORDER BY `" + order + " ";
+                sql += "ORDER BY `" + order + " ";
 
-            sql = sql.replaceAll("(?i)`rand\\(\\)", "RAND()");
-            sql = sql.replaceAll("(?i)rand\\(\\)`", "RAND()");
+                sql = sql.replaceAll("(?i)`rand\\(\\)", "RAND()");
+                sql = sql.replaceAll("(?i)rand\\(\\)`", "RAND()");
+            } else {
+                sql += "ORDER BY FIELD" + order.substring(5) + " ";
+            }
         }
 
         if (!limit.equals("")) {
@@ -802,8 +845,20 @@ public class Db implements Cloneable{
         return this.update(where, data);
     }
 
-    public int delete() {
-        return 0;
+    public int delete(Map<String, Object> where) {
+        String sql = "DELETE FROM `" + this.table() + "` ";
+
+        sql += this.where(where);
+
+        return this.action(sql);
+    }
+
+    public int delete(String id) {
+        Map<String, Object> map = new HashMap<>();
+
+        map.put("id", id);
+
+        return this.delete(map);
     }
 
     public int increase(Map<String, Object> where, Map<String, String> item, Map<String, String> data) {
@@ -818,7 +873,20 @@ public class Db implements Cloneable{
         return 0;
     }
 
-    public void cols() {
+    public List<Object[]> cols(boolean... restore_table) {
+        String sql = "SHOW COLUMNS FROM " + this.table();
+
+        if (restore_table.length == 0) {
+            this.restore_table();
+        }
+
+        Query nativeQuery = em.createNativeQuery(sql);
+
+        List<Object[]> list = nativeQuery.getResultList();
+
+        em.clear();
+
+        return list;
     }
 
     @Override

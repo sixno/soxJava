@@ -54,10 +54,10 @@ public class UserModel {
         map.putIfAbsent("#order", "id,asc");
 
         if (count.length == 1 && count[0] == 1) {
-            return this.db.list_count(map);
+            return db.list_count(map);
         }
 
-        for (Map<String, String> item: this.db.read(map)) {
+        for (Map<String, String> item: db.read(map)) {
             list.add(this.for_return(item));
         }
 
@@ -69,13 +69,13 @@ public class UserModel {
     }
 
     public Map<String, Object> item(String id) {
-        Map<String, String> data = this.db.find(field, id);
+        Map<String, String> data = db.find(field, id);
 
         return this.for_return(data);
     }
 
     public int mod(String user_id, Map<String, String> data) {
-        return this.db.update(user_id, data);
+        return db.update(user_id, data);
     }
 
     public Map<String, Object> login(String id,String remember) {
@@ -88,7 +88,7 @@ public class UserModel {
 
             this.set_session(id, time, remember);
 
-            this.db.update(id, "login_time", time);
+            db.update(id, "login_time", time);
 
             user.put("login_time", time);
 
@@ -140,7 +140,7 @@ public class UserModel {
         map.put("#field", "auth_id,value");
         map.put("user_id", user_id);
 
-        List<Map<String, String>> auth_list = this.db.table(auth_table).read(map);
+        List<Map<String, String>> auth_list = db.table(auth_table).read(map);
 
         if (auth_list != null) {
             for (Map<String, String> auth_item : auth_list) {
