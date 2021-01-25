@@ -701,9 +701,19 @@ public class Db implements Cloneable{
         if (!arr[1].contains(":")) {
             map.put("id", arr[1]);
         } else {
-            String[] arr_1 = arr[1].split(":");
+            if (!arr[1].contains(";")) {
+                String[] arr_1 = arr[1].split(":");
 
-            map.put(arr_1[0], arr_1[1]);
+                map.put(arr_1[0], arr_1[1]);
+            } else {
+                String[] arr_1 = arr[1].split(";");
+
+                for (String str_1 : arr_1) {
+                    String[] arr_2 = str_1.split(":");
+
+                    map.put(arr_2[0], arr_2[1]);
+                }
+            }
         }
 
         Map<String, String> item = this.find(map);

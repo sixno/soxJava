@@ -41,7 +41,11 @@ public class Api {
                     json_str.append(line);
                 }
 
-                req.set(JSONObject.parseObject(json_str.toString()));
+                System.out.println("input json: " + json_str);
+
+                req.set(json_str.toString().startsWith("{") ? JSONObject.parseObject(json_str.toString()) : new HashMap<>());
+
+                if (req.get() == null) req.set(new HashMap<>());
             } catch (IOException e) {
                 e.printStackTrace();
             }

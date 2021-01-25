@@ -18,14 +18,15 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Random;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
 public class Com {
+    @Autowired
+    Api api;
+
     @Autowired
     UserModel user_m;
 
@@ -44,6 +45,34 @@ public class Com {
         Map<String, String> user_auth = user_m.get_auth(user_id);
 
         return ("," + user_auth.getOrDefault(index, "") + ",").contains("," + value + ",");
+    }
+
+    public boolean check_sign() {
+        return true;
+    }
+
+    public String sign(Map<String, String> data, String ak, String sk, String... time) {
+        String ds = time.length > 0 ? time[0] : api.get("time");
+
+        if (ds.equals("")) return "";
+
+        if (data != null && data.size() > 0) {
+            Map<String, String> map = new TreeMap<>();
+
+            for (String key : data.keySet()) {
+                map.put(key, data.get(key));
+            }
+
+            List<Map.Entry<String, String>> list = new ArrayList<>(map.entrySet());
+
+            list.sort(Map.Entry.comparingByKey());
+
+            for (int i = 0;i < list.size();i++) {
+                ds += "&" + list.get(i).getKey() + "=" + list.get(i).getValue();
+            }
+        }
+
+        return this.md5(sk + this.md5(ak + ds));
     }
 
     public Long time() {
@@ -282,16 +311,16 @@ public class Com {
             tmp[i] = (byte) (txt_bytes[i] ^ mix_bytes[ctr++]);
         }
 
-        String txt_new = mix + new String(Base64.encodeBase64(tmp));
+        String txt_new = mix + new String(tmp);
 
         byte[] tmp_new = str_key(txt_new, key);
 
-        return new String(Base64.encodeBase64(tmp_new));
+        return  (new String(Base64.encodeBase64(tmp_new))).replace("+", "-").replace("/", "_").replace("=", "");
     }
 
     public String str_decrypt(String txt, String key) {
         try {
-            txt = new String(Base64.decodeBase64(txt.getBytes(StandardCharsets.UTF_8)));
+            txt = new String(Base64.decodeBase64(txt.replace("-", "+").replace("_", "/").getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             return "";
         }
@@ -304,7 +333,7 @@ public class Com {
         byte[] txt_bytes;
 
         try {
-            txt_bytes = Base64.decodeBase64(txt_new.substring(4).getBytes(StandardCharsets.UTF_8));
+            txt_bytes = txt_new.substring(4).getBytes(StandardCharsets.UTF_8);
         } catch (Exception e) {
             return "";
         }
