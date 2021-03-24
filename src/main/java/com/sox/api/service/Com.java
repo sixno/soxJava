@@ -4,12 +4,15 @@ import com.sox.api.model.UserModel;
 import org.apache.tomcat.util.codec.binary.Base64;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.crypto.Cipher;
 import javax.servlet.http.HttpServletRequest;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
@@ -18,9 +21,11 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 public class Com {
@@ -52,9 +57,9 @@ public class Com {
     }
 
     public String sign(Map<String, String> data, String ak, String sk, String... time) {
-        String ds = time.length > 0 ? time[0] : api.get("time");
+        StringBuilder ds = new StringBuilder(time.length > 0 ? time[0] : api.get("time"));
 
-        if (ds.equals("")) return "";
+        if (ds.toString().equals("")) return "";
 
         if (data != null && data.size() > 0) {
             Map<String, String> map = new TreeMap<>();
@@ -67,16 +72,60 @@ public class Com {
 
             list.sort(Map.Entry.comparingByKey());
 
-            for (int i = 0;i < list.size();i++) {
-                ds += "&" + list.get(i).getKey() + "=" + list.get(i).getValue();
+            for (Map.Entry<String, String> stringStringEntry : list) {
+                ds.append("&").append(stringStringEntry.getKey()).append("=").append(stringStringEntry.getValue());
             }
         }
 
         return this.md5(sk + this.md5(ak + ds));
     }
 
+    public String join(List<String> list, String separator) {
+        StringBuilder sb = new StringBuilder();
+
+        for (String item : list) {
+            sb.append(item).append(separator);
+        }
+
+        return sb.toString().substring(0, sb.toString().length() - 1);
+    }
+
     public Long time() {
         return System.currentTimeMillis() / 1000L;
+    }
+
+    public String date(String pattern, Long... time) {
+        // pattern example: yyyy-MM-dd HH:mm:ss z
+        SimpleDateFormat format = new SimpleDateFormat(pattern);
+
+        Date date = new Date(time.length == 0 ? System.currentTimeMillis() : time[0] * 1000L);
+
+        return format.format(date);
+    }
+
+    public String path(String path) {
+        return System.getProperty("user.dir") + java.io.File.separator + path.replace("/", java.io.File.separator);
+    }
+
+    public String resource(String path, String... delimiters) {
+        BufferedReader reader = null;
+        String content = "";
+
+        String delimiter = delimiters.length > 0 ? delimiters[0] : "\n";
+
+        try {
+            ClassPathResource resource = new ClassPathResource(path);
+
+            reader = new BufferedReader(new InputStreamReader(resource.getInputStream()));
+
+            content = reader.lines().collect(Collectors.joining(delimiter));
+
+            reader.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return content;
     }
 
     public String remote_ip() {

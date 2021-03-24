@@ -67,7 +67,8 @@ public class Check {
             if (other[0].startsWith("#")) {
                 String[] field = other[0].substring(1).split(",");
                 String   value = "";
-                int      i = 0;
+
+                int i = 0;
 
                 for (String tp : err_tp.get(rule_name).split("%s")) {
                     if (i < field.length) {
@@ -78,6 +79,7 @@ public class Check {
 
                     i++;
                 }
+
                 if (error.equals("")) error = value;
 
                 errors.putIfAbsent(field[0], value);

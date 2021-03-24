@@ -817,7 +817,6 @@ public class Curl {
                 loadCookies(getIO(cookie));
             }
         }
-
         boolean needRetry = false;
         if (dataStr.length() > 0 && "GET".equals(method)) url += (url.contains("?") ? "&" : "?") + dataStr;
         URL urlObj = null;
@@ -988,8 +987,8 @@ public class Curl {
                 if (needRetry && retryLeft > 0 && retryDelay > 0)
                     try { Thread.sleep((long) (retryDelay * 1000d)); } catch (Exception ignored) {}
             }
-        } while (location && redirect != null || needRetry && --retryLeft >= 0
-                && (retryMaxTime <= 0 || System.currentTimeMillis() - startTime < (long) (retryMaxTime * 1000d)));
+        } while (location && redirect != null || needRetry && --retryLeft >= 0 && (retryMaxTime <= 0 || System.currentTimeMillis() - startTime < (long) (retryMaxTime * 1000d)));
+
         return error(stdout, stderr, lastEx, silent, resolver, fallback);
     }
 

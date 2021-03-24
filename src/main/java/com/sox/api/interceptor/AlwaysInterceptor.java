@@ -11,6 +11,9 @@ import org.springframework.web.servlet.ModelAndView;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.net.URLDecoder;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class AlwaysInterceptor implements HandlerInterceptor {
     @Autowired
@@ -97,7 +100,19 @@ public class AlwaysInterceptor implements HandlerInterceptor {
         api.req.remove();
         api.res.remove();
 
-        System.out.println("Response time: " + (System.currentTimeMillis() - start) + "ms");
+        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
+        String queryString = request.getQueryString();
+
+        if (queryString != null) {
+            try {
+                queryString = URLDecoder.decode(queryString, "UTF-8");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        System.out.println("[" + df.format(new Date()) + "] [" + request.getRequestURI() + (queryString == null ? "" : "?" + queryString) + "] Response time: " + (System.currentTimeMillis() - start) + "ms");
     }
 
     @Override

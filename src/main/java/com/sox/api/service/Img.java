@@ -23,8 +23,8 @@ public class Img {
         int src_width  = bufImage.getWidth();
         int src_height = bufImage.getHeight();
 
-        float src_ratio = src_width / src_height;
-        float dst_ratio = dst_width / dst_height;
+        float src_ratio = (float)src_width / src_height;
+        float dst_ratio = (float)dst_width / dst_height;
 
         int new_width  = 0;
         int new_height = 0;
@@ -37,7 +37,7 @@ public class Img {
 
             bufImage = toBufferedImage(bufImage.getScaledInstance(new_width, new_height, BufferedImage.SCALE_SMOOTH));
 
-            bufImage = bufImage.getSubimage((int) Math.floor(Math.abs(dst_width - new_width) / 2), 0, dst_width, dst_height);
+            bufImage = bufImage.getSubimage((int) Math.floor(Math.abs(dst_width - new_width) / 2.0), 0, dst_width, dst_height);
         }
 
         if (src_ratio < dst_ratio && src_width != dst_width) {
@@ -48,7 +48,7 @@ public class Img {
 
             bufImage = toBufferedImage(bufImage.getScaledInstance(new_width, new_height, BufferedImage.SCALE_SMOOTH));
 
-            bufImage = bufImage.getSubimage(0, (int) Math.floor(Math.abs(dst_height - new_height) / 2), dst_width, dst_height);
+            bufImage = bufImage.getSubimage(0, (int) Math.floor(Math.abs(dst_height - new_height) / 2.0), dst_width, dst_height);
         }
 
         if (src_ratio == dst_ratio && src_width != dst_width) {

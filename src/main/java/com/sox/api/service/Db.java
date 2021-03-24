@@ -5,7 +5,6 @@ import org.springframework.stereotype.Service;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import javax.persistence.Query;
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,51 +43,11 @@ public class Db implements Cloneable{
 
         Query nativeQuery = em.createNativeQuery(sql);
 
-        List<Object> resultList = nativeQuery.getResultList();
-
-        String result = resultList.get(0) != null ? resultList.get(0).toString() : "";
+        List<?> resultList = nativeQuery.getResultList();
 
         em.clear();
 
-        return result;
-    }
-
-    public List<Map<String, String>> single_col(String sql) {
-        this.restore_table();
-
-        String col = "";
-        ArrayList<Map<String, String>> list = new ArrayList<>();
-
-        Pattern p = Pattern.compile("(?i)select (.*?) from");
-        Matcher m = p.matcher(sql);
-
-        if (m.find()) {
-            String col_str = m.group(1).trim();
-
-            String[] col_arr = col_str.split(",");
-
-            for (String s : col_arr) {
-                String[] col_arr_i = s.split(" |\\.");
-
-                col = col_arr_i[col_arr_i.length - 1].replace("`", "");
-            }
-        }
-
-        Query nativeQuery = em.createNativeQuery(sql);
-
-        List<Object> resultList = nativeQuery.getResultList();
-
-        if (resultList != null) {
-            for (Object resultItem : resultList) {
-                Map<String, String> objectMap = new HashMap<>();
-
-                objectMap.put(col, resultItem.toString());
-
-                list.add(objectMap);
-            }
-        }
-
-        return list;
+        return resultList.get(0) != null ? resultList.get(0).toString() : "";
     }
 
     public List<Map<String, String>> result(String sql) {
@@ -112,25 +71,29 @@ public class Db implements Cloneable{
             }
         }
 
-        if (col.size() == 1) return this.single_col(sql);
-
         Query nativeQuery = em.createNativeQuery(sql);
 
-        List<Object[]> resultList = nativeQuery.getResultList();
+        List<?> resultList = nativeQuery.getResultList();
+
+        em.clear();
 
         if (resultList != null) {
-            for (Object[] resultItem : resultList) {
+            for (Object resultItem : resultList) {
                 Map<String, String> objectMap = new HashMap<>();
 
-                for(int i = 0;i < col.size();i++) {
-                    objectMap.put(col.get(i), resultItem[i].toString());
+                if (resultItem instanceof Object[]) {
+                    Object[] objectList = (Object[])resultItem;
+
+                    for(int i = 0;i < col.size();i++) {
+                        objectMap.put(col.get(i), objectList[i] != null ? objectList[i].toString() : "");
+                    }
+                } else {
+                    objectMap.put(col.get(0), resultItem != null ? resultItem.toString() : "");
                 }
 
                 list.add(objectMap);
             }
         }
-
-        em.clear();
 
         return list;
     }
@@ -150,12 +113,28 @@ public class Db implements Cloneable{
             m_count++;
         }
 
-        // 为了手动开启事务，必须新建一个entityManager实例，否则报错共享实例不能手动开启事务
+        // 为了手动开启事务，必须新建一个entityManager实例作为事务管理器，否则报错共享实例不能手动开启事务
         if(tm == null) tm = em.getEntityManagerFactory().createEntityManager();
 
         Query nativeQuery = tm.createNativeQuery(sql);
 
-        tm.getTransaction().begin();
+        try {
+            tm.getTransaction().begin();
+        } catch (Exception e) {
+            e.printStackTrace();
+
+            System.out.println("Maybe the tm object lost db connection, So rebuild tm");
+
+            // 关闭无效事务管理器并销毁
+            tm.close();
+            tm = null;
+
+            tm = em.getEntityManagerFactory().createEntityManager();
+
+            nativeQuery = tm.createNativeQuery(sql);
+
+            tm.getTransaction().begin();
+        }
 
         try {
             result = nativeQuery.executeUpdate();
@@ -168,7 +147,7 @@ public class Db implements Cloneable{
         if (sql.indexOf("INSERT INTO") == 0 && m_count == 2) {
             nativeQuery = tm.createNativeQuery("SELECT @@IDENTITY AS 'Identity'");
 
-            List<Object> id = nativeQuery.getResultList();
+            List<?> id = nativeQuery.getResultList();
 
             int_id = Integer.parseInt(id.get(0).toString());
         }
@@ -201,11 +180,8 @@ public class Db implements Cloneable{
         for (String key : map.keySet()) {
             String val = "";
             Object obj = map.get(key);
-            String typ = obj.getClass().getName();
 
-            typ = typ.substring(typ.lastIndexOf(".") + 1);
-
-            val = obj.toString();
+            val = obj == null ? "" : obj.toString();
 
             String front_char = key.substring(0,1);
 
@@ -307,11 +283,17 @@ public class Db implements Cloneable{
                     val = "NULL";
                 }
             } else {
-                if (typ.equals("List")) {
+                if (obj instanceof ArrayList<?>) {
                     val = "";
-                } else {
-                    val = "('" + val.replace(",", "','") + "')";
+
+                    for (Object str : (List<?>) obj) {
+                        val += str.toString() + ",";
+                    }
+
+                    if(!val.equals("")) val = val.substring(0, val.length() - 1);
                 }
+
+                val = "('" + val.replace(",", "','") + "')";
             }
 
             switch (logic) {
@@ -415,22 +397,6 @@ public class Db implements Cloneable{
         return sql;
     }
 
-    public String where(String sql_where, String... str_arr) {
-        StringBuilder sql = new StringBuilder("WHERE ");
-
-        String[] where = sql_where.split("\\?");
-
-        for (int i = 0;i < where.length;i++) {
-            if (i < str_arr.length) {
-                sql.append(String.format(where[i] + "%s", this.escape(str_arr[i])));
-            } else {
-                sql.append(where[i]);
-            }
-        }
-
-        return sql.toString();
-    }
-
     public String sql(String sql, String... str) {
         String[] sql_arr = sql.split("\\?");
 
@@ -445,14 +411,6 @@ public class Db implements Cloneable{
         }
 
         return sqlBuilder.toString();
-    }
-
-    public int count() {
-        String sql = "SELECT COUNT(*) FROM `" + this.table() + "` FORCE INDEX(PRIMARY)";
-
-        String result = this.single(sql);
-
-        return Integer.parseInt(result);
     }
 
     public int count(Map<String, Object> map) {
@@ -488,19 +446,17 @@ public class Db implements Cloneable{
         return Integer.parseInt(result);
     }
 
-    public int count(String where_field, String where_value, String... more) {
+    public int count(String... fv) {
         Map<String, Object> where = new HashMap<>();
 
-        where.put(where_field, where_value);
-
-        for (int i = 0;i < more.length;i += 2) {
-            where.put(more[i], more[i + 1]);
+        for (int i = 0;i < fv.length;i += 2) {
+            where.put(fv[i], fv[i + 1]);
         }
 
         return this.count(where);
     }
 
-    public List<Map<String, Object>> list_count(Map<String, Object> map) {
+    public List<Map<String, Object>> total(Map<String, Object> map) {
         int count = this.count(map);
 
         List<Map<String, Object>> list = new ArrayList<>();
@@ -508,20 +464,6 @@ public class Db implements Cloneable{
         Map<String, Object> count_map = new HashMap<>();
 
         count_map.put("count", count);
-
-        list.add(count_map);
-
-        return list;
-    }
-
-    public List<Map<String, String>> count_list(Map<String, Object> map) {
-        int count = this.count(map);
-
-        List<Map<String, String>> list = new ArrayList<>();
-
-        Map<String, String> count_map = new HashMap<>();
-
-        count_map.put("count", new BigDecimal(count + "").toString());
 
         list.add(count_map);
 
@@ -537,7 +479,7 @@ public class Db implements Cloneable{
         String limit = map.getOrDefault("#limit","").toString();
 
         if (field.equals("") || field.equals("*")) {
-            List<Object[]> cols = this.cols(false);
+            List<Object[]> cols = this.cols(this.table());
 
             field = "";
 
@@ -546,6 +488,24 @@ public class Db implements Cloneable{
             }
 
             field = field.substring(0, field.length() - 1);
+        } else if (field.contains("*")) {
+            String[] field_arr = field.split(",");
+
+            field = "";
+
+            for (String field_str : field_arr) {
+                if (field_str.contains("*")) {
+                    String[] field_str_arr = field_str.split("\\.");
+
+                    List<Object[]> cols = this.cols(field_str_arr[0]);
+
+                    for (Object[] col : cols) {
+                        field += (field.equals("") ? "" : ",") + field_str_arr[0] + "." + col[0].toString();
+                    }
+                } else {
+                    field += (field.equals("") ? "" : ",") + field_str;
+                }
+            }
         }
 
         field = field.replace(".","`.`");
@@ -553,7 +513,7 @@ public class Db implements Cloneable{
         field = field.replace(",", "`,`");
         field = "`" + field + "`";
 
-        field = field.replace("`*`","*");
+        // field = field.replace("`*`","*");
 
         field = field.replaceAll("(?i)`distinct ", "DISTINCT `");
 
@@ -610,57 +570,22 @@ public class Db implements Cloneable{
         return this.result(sql);
     }
 
-    public List<Map<String, String>> read(String field) {
+    public List<Map<String, String>> read(String field, String... fv) {
         Map<String, Object> where = new HashMap<>();
 
         where.put("#field", field);
 
-        return this.read(where);
-    }
+        if (fv.length % 2 == 0) {
+            for (int i = 0;i < fv.length;i += 2) {
+                where.put(fv[i], fv[i + 1]);
+            }
+        } else {
+            where.put("#order", fv[0]);
 
-    public List<Map<String, String>> read(String field, int length) {
-        Map<String, Object> where = new HashMap<>();
-
-        where.put("#field", field);
-        where.put("#limit", length + ",0");
-
-        return this.read(where);
-    }
-
-    public List<Map<String, String>> read(String field, int length, int offset) {
-        Map<String, Object> where = new HashMap<>();
-
-        where.put("#field", field);
-        where.put("#limit", length + "," + offset);
-
-        return this.read(where);
-    }
-
-    public List<Map<String, String>> read(String field, String order) {
-        Map<String, Object> where = new HashMap<>();
-
-        where.put("#field", field);
-        where.put("#order", order);
-
-        return this.read(where);
-    }
-
-    public List<Map<String, String>> read(String field, String order, int length) {
-        Map<String, Object> where = new HashMap<>();
-
-        where.put("#field", field);
-        where.put("#limit", length + ",0");
-        where.put("#order", order);
-
-        return this.read(where);
-    }
-
-    public List<Map<String, String>> read(String field, String order, int length, int offset) {
-        Map<String, Object> where = new HashMap<>();
-
-        where.put("#field", field);
-        where.put("#limit", length + "," + offset);
-        where.put("#order", order);
+            for (int i = 1;i < fv.length;i += 2) {
+                where.put(fv[i], fv[i + 1]);
+            }
+        }
 
         return this.read(where);
     }
@@ -673,56 +598,70 @@ public class Db implements Cloneable{
         return list.size() == 0 ? new HashMap<>() : list.get(0);
     }
 
-    public Map<String, String> find(String field, String id) {
+    public Map<String, String> find(String field, String... fv) {
         Map<String, Object> map = new HashMap<>();
 
         map.put("#field", field);
-        map.put("id", id);
 
-        return this.find(map);
-    }
-
-    public Map<String, String> find(String field, String key, String val) {
-        Map<String, Object> map = new HashMap<>();
-
-        map.put("#field", field);
-        map.put(key, val);
-
-        return this.find(map);
-    }
-
-    public String find(String field) {
-        Map<String, Object> map = new HashMap<>();
-
-        String[] arr = field.split("#");
-
-        map.put("#field", arr[0]);
-
-        if (!arr[1].contains(":")) {
-            map.put("id", arr[1]);
-        } else {
-            if (!arr[1].contains(";")) {
-                String[] arr_1 = arr[1].split(":");
-
-                map.put(arr_1[0], arr_1[1]);
+        if (fv.length == 1) {
+            if (!fv[0].contains(",")) {
+                map.put("id", fv[0]);
             } else {
-                String[] arr_1 = arr[1].split(";");
+                map.put("#order", fv[0]);
+            }
+        } else {
+            if (fv.length % 2 == 0) {
+                for (int i = 0;i < fv.length;i += 2) {
+                    map.put(fv[i], fv[i + 1]);
+                }
+            } else {
+                map.put("#order", fv[0]);
 
-                for (String str_1 : arr_1) {
-                    String[] arr_2 = str_1.split(":");
-
-                    map.put(arr_2[0], arr_2[1]);
+                for (int i = 1;i < fv.length;i += 2) {
+                    map.put(fv[i], fv[i + 1]);
                 }
             }
         }
 
-        Map<String, String> item = this.find(map);
+        return this.find(map);
+    }
+
+    public String field(String field, Map<String, Object> where) {
+        where.put("#field", field);
+
+        Map<String, String> item = this.find(where);
 
         for (String col : item.keySet()) {
             return item.get(col);
         }
 
         return "";
+    }
+
+    public String field(String field, String... fv) {
+        Map<String, Object> map = new HashMap<>();
+
+        if (fv.length == 1) {
+            if (!fv[0].contains(",")) {
+                map.put("id", fv[0]);
+            } else {
+                map.put("#order", fv[0]);
+            }
+        } else {
+            if (fv.length % 2 == 0) {
+                for (int i = 0;i < fv.length;i += 2) {
+                    map.put(fv[i], fv[i + 1]);
+                }
+            } else {
+                map.put("#order", fv[0]);
+
+                for (int i = 1;i < fv.length;i += 2) {
+                    map.put(fv[i], fv[i + 1]);
+                }
+            }
+        }
+
+        return this.field(field, map);
     }
 
     public int create(Map<String, String> data) {
@@ -741,6 +680,16 @@ public class Db implements Cloneable{
         sql += "(" + field.substring(0, field.length() - 1) + ") VALUES (" + value.substring(0, value.length() - 1) + ")";
 
         return this.action(sql);
+    }
+
+    public int create(String... fv) {
+        Map<String, String> data = new HashMap<>();
+
+        for (int i = 0;i < fv.length;i += 2) {
+            data.put(fv[i], fv[i + 1]);
+        }
+
+        return data.size() > 0 ? this.create(data) : 0;
     }
 
     public int create(List<Map<String, String>> list) {
@@ -800,55 +749,45 @@ public class Db implements Cloneable{
         return this.update(where, data);
     }
 
-    public int update(String id, String dv, Map<String, String> data) {
+    public int update(String field, Object value, Map<String, String> data) {
         Map<String, Object> where = new HashMap<>();
 
-        where.put(id, dv);
+        where.put(field, value);
 
         return this.update(where, data);
     }
 
-    public int update(Map<String, String> data, String... wv) {
+    public int update(String id, String... fv) {
         Map<String, Object> where = new HashMap<>();
 
-        for (int i = 0;i < wv.length;i += 2) {
-            where.put(wv[i], wv[i + 1]);
-        }
-
-        return this.update(where, data);
-    }
-
-    public int update(String id, String... dv) {
-        Map<String, Object> where = new HashMap<>();
-
-        if (dv.length % 2 == 0) {
+        if (fv.length % 2 == 0) {
             where.put("id", id);
         } else {
-            where.put(id, dv[0]);
+            where.put(id, fv[0]);
         }
 
         Map<String, String> data = new HashMap<>();
 
-        for (int i = dv.length % 2;i < dv.length;i += 2) {
-            data.put(dv[i], dv[i + 1]);
+        for (int i = fv.length % 2;i < fv.length;i += 2) {
+            data.put(fv[i], fv[i + 1]);
         }
 
-        return this.update(where, data);
+        return data.size() > 0 ? this.update(where, data) : 0;
     }
 
-    public int update(int id, String... dv) {
+    public int update(int where_num, String... fv) {
         Map<String, Object> where = new HashMap<>();
         Map<String, String> data  = new HashMap<>();
 
-        int where_num = 0;
+        int count_num = 0;
 
-        for (int i = 0;i < dv.length;i += 2) {
-            if(where_num < id) {
-                where.put(dv[i], dv[i + 1]);
+        for (int i = 0;i < fv.length;i += 2) {
+            if(count_num < where_num) {
+                where.put(fv[i], fv[i + 1]);
 
-                where_num++;
+                count_num++;
             } else {
-                data.put(dv[i], dv[i + 1]);
+                data.put(fv[i], fv[i + 1]);
             }
         }
 
@@ -883,18 +822,54 @@ public class Db implements Cloneable{
         return 0;
     }
 
-    public List<Object[]> cols(boolean... restore_table) {
-        String sql = "SHOW COLUMNS FROM " + this.table();
+    public List<Object[]> cols(String... table) {
+        List<Object[]> list = new ArrayList<>();
 
-        if (restore_table.length == 0) {
+        String sql = "SHOW COLUMNS FROM ";
+
+        if (table.length == 0) {
+            sql += this.table();
+
             this.restore_table();
+        } else {
+            sql += table[0];
         }
 
         Query nativeQuery = em.createNativeQuery(sql);
 
-        List<Object[]> list = nativeQuery.getResultList();
+        List<?> resultList = nativeQuery.getResultList();
 
         em.clear();
+
+        if (resultList != null) {
+            for (Object resultItem : resultList) {
+                if (resultItem instanceof Object[]) {
+                    list.add((Object[]) resultItem);
+                }
+            }
+        }
+
+        return list;
+    }
+
+    public List<String> tbls() {
+        List<String> list = new ArrayList<>();
+
+        String sql = "SHOW TABLES";
+
+        Query nativeQuery = em.createNativeQuery(sql);
+
+        List<?> resultList = nativeQuery.getResultList();
+
+        em.clear();
+
+        if (resultList != null) {
+            for (Object resultItem : resultList) {
+                if (resultItem instanceof String) {
+                    list.add((String) resultItem);
+                }
+            }
+        }
 
         return list;
     }
