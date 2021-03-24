@@ -11,6 +11,7 @@
 - Thread safety, Request isolation
 - No entity and repository, EntityManager instead
 - Run Fast, No Warn, No Error
+- Source level reuse
 - The last but not least, You can write your own code in the way you are familiar with Spring Boot, regardless of any of the above features
 - Truly last but not least, It is published using the MIT protocol
 
@@ -27,5 +28,6 @@
 - 线程安全，请求隔离
 - 没有实体和存储类，使用实体管理器替代
 - 运行很快，没有警告，没有坑
+- 源码级复用
 - 最后，祝您使用愉快
 - 真正的最后，它使用令人不膈应的MIT协议发布
