@@ -13,7 +13,7 @@
 - Run Fast, No Warn, No Error
 - Source level reuse
 - The last but not least, You can write your own code in the way you are familiar with Spring Boot, regardless of any of the above features
-- Truly last but not least, It is published using the MIT protocol
+- Truly last but not least, It is published by the MIT protocol
 
 ---
 
