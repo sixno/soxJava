@@ -1,11 +1,14 @@
 package com.sox.api.service;
 
+import org.springframework.stereotype.Service;
+
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 
+@Service
 public class Img {
     public void crop(String file, int dst_width, int dst_height) {
         BufferedImage bufImage;
@@ -18,6 +21,8 @@ public class Img {
             return;
         }
 
+        boolean transparent = file.substring(file.lastIndexOf(".") + 1).toLowerCase().equals("png");
+
         boolean save = false;
 
         int src_width  = bufImage.getWidth();
@@ -26,8 +31,8 @@ public class Img {
         float src_ratio = (float)src_width / src_height;
         float dst_ratio = (float)dst_width / dst_height;
 
-        int new_width  = 0;
-        int new_height = 0;
+        int new_width;
+        int new_height;
 
         if (src_ratio > dst_ratio && src_height != dst_height) {
             save = true;
@@ -35,7 +40,7 @@ public class Img {
             new_width  = Math.round(dst_height * src_ratio);
             new_height = dst_height;
 
-            bufImage = toBufferedImage(bufImage.getScaledInstance(new_width, new_height, BufferedImage.SCALE_SMOOTH));
+            bufImage = toBufferedImage(bufImage.getScaledInstance(new_width, new_height, BufferedImage.SCALE_SMOOTH), transparent);
 
             bufImage = bufImage.getSubimage((int) Math.floor(Math.abs(dst_width - new_width) / 2.0), 0, dst_width, dst_height);
         }
@@ -46,7 +51,7 @@ public class Img {
             new_width  = dst_width;
             new_height = Math.round(dst_width / src_ratio);
 
-            bufImage = toBufferedImage(bufImage.getScaledInstance(new_width, new_height, BufferedImage.SCALE_SMOOTH));
+            bufImage = toBufferedImage(bufImage.getScaledInstance(new_width, new_height, BufferedImage.SCALE_SMOOTH), transparent);
 
             bufImage = bufImage.getSubimage(0, (int) Math.floor(Math.abs(dst_height - new_height) / 2.0), dst_width, dst_height);
         }
@@ -54,14 +59,14 @@ public class Img {
         if (src_ratio == dst_ratio && src_width != dst_width) {
             save = true;
 
-            bufImage = toBufferedImage(bufImage.getScaledInstance(dst_width, dst_height, BufferedImage.SCALE_SMOOTH));
+            bufImage = toBufferedImage(bufImage.getScaledInstance(dst_width, dst_height, BufferedImage.SCALE_SMOOTH), transparent);
         }
 
         if (save) {
-            (new File(file)).delete();
+            boolean del_ok = (new File(file)).delete();
 
             try {
-                ImageIO.write(bufImage, file.substring(file.lastIndexOf(".") + 1).toUpperCase(), new File(file));
+                if(del_ok) ImageIO.write(bufImage, file.substring(file.lastIndexOf(".") + 1).toUpperCase(), new File(file));
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -79,12 +84,16 @@ public class Img {
             return;
         }
 
-        (new File(file)).delete();
+        boolean del_ok = (new File(file)).delete();
+
+        boolean transparent = file.substring(file.lastIndexOf(".") + 1).toLowerCase().equals("png");
+
+        bufImage = toBufferedImage(bufImage, transparent);
 
         bufImage = bufImage.getSubimage(x, y, width, height);
 
         try {
-            ImageIO.write(bufImage, file.substring(file.lastIndexOf(".") + 1).toUpperCase(), new File(file));
+            if(del_ok) ImageIO.write(bufImage, file.substring(file.lastIndexOf(".") + 1).toUpperCase(), new File(file));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -102,13 +111,19 @@ public class Img {
         return "";
     }
 
-    private static BufferedImage toBufferedImage(Image img) {
+    private static BufferedImage toBufferedImage(Image img, boolean transparent) {
         int width  = img.getWidth(null);
         int height = img.getHeight(null);
 
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 
         Graphics2D graphics = image.createGraphics();
+
+        if(transparent) {
+            image = graphics.getDeviceConfiguration().createCompatibleImage(width, height, Transparency.TRANSLUCENT);
+
+            graphics = image.createGraphics();
+        }
 
         graphics.drawImage(img, 0, 0,null);
 

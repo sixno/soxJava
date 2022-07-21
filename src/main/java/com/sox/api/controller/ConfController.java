@@ -1,65 +1,61 @@
 package com.sox.api.controller;
 
 import com.sox.api.interceptor.CheckLogin;
+import com.sox.api.model.ConfModel;
 import com.sox.api.model.EsModel;
 import com.sox.api.service.Api;
-import com.sox.api.service.Db;
+import com.sox.api.service.Com;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@EnableAutoConfiguration
 @CheckLogin
 @RequestMapping("/conf")
 public class ConfController {
     @Autowired
+    private Com com;
+
+    @Autowired
     private Api api;
 
     @Autowired
-    private Db db;
+    private EsModel es_m;
 
     @Autowired
-    private EsModel es;
-
-    String table = "sys_config";
+    private ConfModel conf_m;
 
     @RequestMapping("/list")
     public Map<String, Object> list() {
-        Map<String, String> conf = new HashMap<>();
-
-        Map<String, Object> map = new HashMap<>();
-
-        map.put("#field", "id,content");
-
-        for (Map<String, String> item : db.table(table).read(map)) {
-            conf.put(item.get("id"), item.get("content"));
-        }
-
-        return api.put(conf);
+        return api.put(conf_m.list);
     }
 
     @RequestMapping("/set")
     public Map<String, Object> set() {
         Map<String, Object> json = api.json();
 
-        Map<String, String> data;
-
         int num = 0;
 
         for (String key : json.keySet()) {
-            data = new HashMap<>();
-
-            data.put("content", json.get(key).toString());
-
-            num += db.table(table).update(key, data);
+            num += conf_m.set(key, json.get(key).toString());
         }
 
-        return num > 0 ? api.msg("修改成功") : api.msg("修改失败");
+        if (num > 0) {
+            com.request_hand_out("/conf/clean_cache");
+
+            return api.msg("修改成功");
+        } else {
+            return api.err("修改失败");
+        }
+    }
+
+    @RequestMapping("/clean_cache")
+    public Map<String, Object> clean_cache() {
+        conf_m.clean();
+
+        return api.msg("配置缓存已清理");
     }
 
     @RequestMapping("/set_es_index")
@@ -67,7 +63,7 @@ public class ConfController {
         String index = api.json("index");
         String value = api.json("value");
 
-        if (es.set_index(index, value)) {
+        if (es_m.set_index(index, value)) {
             return api.msg("新建成功");
         } else {
             return api.err("新建失败");
@@ -78,7 +74,7 @@ public class ConfController {
     public Map<String, Object> del_es_index() {
         String index = api.json("index");
 
-        if (es.del_index(index)) {
+        if (es_m.del_index(index)) {
             return api.msg("删除成功");
         } else {
             return api.err("删除失败");

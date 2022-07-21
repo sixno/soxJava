@@ -1,6 +1,9 @@
 package com.sox.api.service;
 
+import com.alibaba.fastjson.JSONObject;
+import com.sox.api.model.CodeModel;
 import com.sox.api.model.UserModel;
+import org.apache.tomcat.util.buf.StringUtils;
 import org.apache.tomcat.util.codec.binary.Base64;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,7 +15,11 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import javax.crypto.Cipher;
 import javax.servlet.http.HttpServletRequest;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
@@ -29,17 +36,172 @@ import java.util.stream.Collectors;
 
 @Service
 public class Com {
-    @Autowired
-    Api api;
-
-    @Autowired
-    UserModel user_m;
+    @Value("${sox.host_id}")
+    public String host_id;
 
     @Value("#{${sox.rsa.pri_key}}")
-    Map<String, String> pri_keys;
+    public Map<String, String> pri_keys;
+
+    @Value("${sox.super_user}")
+    public String super_user;
+
+    @Autowired
+    public Api api;
+
+    @Autowired
+    public UserModel user_m;
+
+    @Autowired
+    public Db db;
+
+    @Autowired
+    public Check check;
+
+    @Autowired
+    public CodeModel code_m;
+
+    public final ThreadLocal<Map<String, String>> http_get = new ThreadLocal<>();
+    public String http_get(String key, String... conf) {
+        String def = conf.length > 0 ? conf[0] : "";
+
+        if (http_get.get() == null) {
+            http_get.set(new LinkedHashMap<>());
+
+            if (RequestContextHolder.getRequestAttributes() != null) {
+                HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+
+                String queryString = request.getQueryString();
+
+                if (queryString != null) {
+                    try {
+                        queryString = URLDecoder.decode(queryString, "UTF-8");
+
+                        String[] qs = queryString.split("&");
+
+                        for (String q : qs) {
+                            int pos = q.indexOf("=");
+
+                            http_get.get().put(q.substring(0, pos), q.substring(pos + 1));
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+
+        return http_get.get().get(key) != null ? http_get.get().get(key) : def;
+    }
+
+    public final ThreadLocal<Map<String, String>> http_post = new ThreadLocal<>();
+    public String http_post(String key, String... conf) {
+        String def = conf.length > 0 ? conf[0] : "";
+
+        if (http_post.get() == null) {
+            http_post.set(new LinkedHashMap<>());
+
+            if (RequestContextHolder.getRequestAttributes() != null) {
+                HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+
+                StringBuilder postString = new StringBuilder();
+
+                try {
+                    BufferedReader bufferReader = new BufferedReader(request.getReader());
+
+                    String line;
+
+                    while ((line = bufferReader.readLine()) != null) {
+                        postString.append(line);
+                    }
+
+                    String queryString = URLDecoder.decode(postString.toString(), "UTF-8");
+
+                    String[] qs = queryString.split("&");
+
+                    for (String q : qs) {
+                        int pos = q.indexOf("=");
+
+                        http_post.get().put(q.substring(0, pos), q.substring(pos + 1));
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        return http_post.get().get(key) != null ? http_get.get().get(key) : def;
+    }
+
+    private final Curl.Resolver<Map<String, Object>> jsonResolver = (httpCode, responseBody) -> {
+        String json_str = new String(responseBody, StandardCharsets.UTF_8);
+
+        System.out.println(json_str);
+
+        return JSONObject.parseObject(json_str);
+    };
+
+    public String net_addr = null;
+    public String net_addr() {
+        if (net_addr == null) {
+            net_addr = "";
+
+            try {
+                InetAddress addr = InetAddress.getLocalHost();
+
+                net_addr = addr.getHostAddress();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        return net_addr;
+    }
+
+    public String mac_addr = null;
+    public String mac_addr(boolean... no_cat) {
+        if (mac_addr == null) {
+            mac_addr = "";
+
+            try {
+                // 获取网卡，获取地址
+                InetAddress addr = InetAddress.getLocalHost();
+
+                byte[] mac = NetworkInterface.getByInetAddress(addr).getHardwareAddress();
+
+                StringBuilder sb = new StringBuilder();
+
+                for(int i = 0;i < mac.length;i++) {
+                    if(i > 0) {
+                        sb.append("-");
+                    }
+
+                    // 字节转换为整数
+                    int temp = mac[i] & 0xff;
+
+                    String str = Integer.toHexString(temp);
+
+                    if(str.length() == 1) {
+                        sb.append("0").append(str);
+                    }else {
+                        sb.append(str);
+                    }
+                }
+
+                mac_addr = sb.toString().toUpperCase();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        return no_cat.length > 0 && no_cat[0] ? mac_addr.replace("-", "") : mac_addr;
+    }
 
     public boolean check_login() {
         return !user_m.get_session("id").equals("");
+    }
+
+    public boolean check_super() {
+        return user_m.get_session("id").equals(super_user);
     }
 
     public boolean check_auth(String index, String value) {
@@ -57,7 +219,7 @@ public class Com {
     }
 
     public String sign(Map<String, String> data, String ak, String sk, String... time) {
-        StringBuilder ds = new StringBuilder(time.length > 0 ? time[0] : api.get("time"));
+        StringBuilder ds = new StringBuilder(time.length > 0 ? time[0] : this.http_get("time"));
 
         if (ds.toString().equals("")) return "";
 
@@ -80,6 +242,76 @@ public class Com {
         return this.md5(sk + this.md5(ak + ds));
     }
 
+    public String at_var(String var) {
+        if (var.startsWith("@")) {
+            String key = var.substring(1);
+            String val = "";
+
+            int pos = var.indexOf("#");
+
+            if (pos > -1) {
+                key = var.substring(1, pos);
+                val = var.substring(pos + 1);
+            }
+
+            String[] arg = val.equals("") ? new String[0] : val.split("\\|");
+
+            switch (key) {
+                case "month_no": // 当年第 n 个月
+                    if (arg.length == 0) {
+                        var = Integer.parseInt(this.date("MM")) + "";
+                    } else {
+                        var = Integer.parseInt(this.date("MM", arg[0])) + "";
+                    }
+                    break;
+                case "date": // 获取当前日期
+                    var = this.date("yyyy-MM-dd");
+                    break;
+                case "time": // 获取当前时间
+                    var = this.date("yyyy-MM-dd HH:mm:ss");
+                    break;
+                case "day":
+                    int delta_days = arg.length > 0 ? Integer.parseInt(arg[0]) : 0;
+
+                    Long time = this.time();
+
+                    time = time + delta_days * 86400;
+
+                    var = this.date("yyyy-MM-dd", time);
+                    break;
+                case "last_month_last_day":
+                    String this_month = this.date("yyyy-MM");
+                    Long this_month_first_day = this.time(this_month + "-01 12:00:00");
+
+                    var = this.date("yyyy-MM-dd", this_month_first_day - 86400);
+                    break;
+                case "first_day_of_year":
+                    String f_year = arg.length > 0 ? arg[0].trim() : this.date("yyyy"); // 默认当年
+
+                    var = f_year + "-01-01";
+                    break;
+                case "last_day_of_year":
+                    String l_year = arg.length > 0 ? arg[0].trim() : this.date("yyyy"); // 默认当年
+
+                    var = l_year + "-12-31";
+                    break;
+                case "latest_data_date":
+                    var = db.table("data_date").field("date", "date,desc");
+                    break;
+
+                default:
+                    if (key.contains(":")) {
+                        String[] code = key.split(":");
+
+                        var = code_m.state(code[0], code[1], code.length > 2 ? Integer.parseInt(code[2]) : 0, code.length > 3 ? code[3] : "");
+                    }
+                    break;
+            }
+        }
+
+        return var;
+    }
+
     public String join(List<String> list, String separator) {
         StringBuilder sb = new StringBuilder();
 
@@ -87,11 +319,42 @@ public class Com {
             sb.append(item).append(separator);
         }
 
-        return sb.toString().substring(0, sb.toString().length() - 1);
+        return sb.toString().substring(0, sb.toString().length() - separator.length());
     }
 
-    public Long time() {
-        return System.currentTimeMillis() / 1000L;
+    public String join(List<Map<String, String>> list, String field, String separator) {
+        StringBuilder sb = new StringBuilder();
+
+        for (Map<String, String> item : list) {
+            sb.append(item.get(field)).append(separator);
+        }
+
+        return sb.toString().substring(0, sb.toString().length() - separator.length());
+    }
+
+    public boolean str_search(String stack, String needle, String... separator) {
+        String sep = separator.length > 0 ? separator[0] : ",";
+
+        return (sep + stack + sep).contains(sep + needle + sep);
+    }
+
+    public Long time(String... arg) {
+        if (arg.length == 0) {
+            return System.currentTimeMillis() / 1000L;
+        } else {
+            String date = arg[0];
+            String pattern = arg.length > 1 ? arg[1] : "yyyy-MM-dd HH:mm:ss";
+
+            try {
+                Date date_obj = new SimpleDateFormat(pattern).parse(date);
+
+                return date_obj.getTime() / 1000L;
+            } catch (Exception e) {
+                e.printStackTrace();
+
+                return null;
+            }
+        }
     }
 
     public String date(String pattern, Long... time) {
@@ -103,8 +366,233 @@ public class Com {
         return format.format(date);
     }
 
+    public String date(String pattern, String date, String... def) {
+        Date date_obj;
+
+        String date_def = def.length > 0 ? def[0] : "";
+
+        SimpleDateFormat format = new SimpleDateFormat(pattern);
+
+        int date_len = date.length();
+
+        switch (date_len) {
+            case 8:
+                try {
+                    date_obj = new SimpleDateFormat("yyyyMMdd").parse(date);
+                } catch (Exception e) {
+                    return date_def;
+                }
+                break;
+            case 10:
+                try {
+                    date_obj = new SimpleDateFormat("yyyy-MM-dd").parse(date);
+                } catch (Exception e) {
+                    return date_def;
+                }
+                break;
+            default:
+                return date_def;
+        }
+
+        return format.format(date_obj);
+    }
+
+    public Map<String, Object> str_obj_map(Map<String, String> map) {
+        Map<String, Object> str_obj = new LinkedHashMap<>();
+
+        for (String key : map.keySet()) {
+            str_obj.put(key, map.get(key));
+        }
+
+        return str_obj;
+    }
+
+    public String map_md5(Object map, Object... ext) {
+        String str = JSONObject.toJSONString(map);
+
+        for (int i = 0;i < ext.length;i++) {
+            str += JSONObject.toJSONString(ext[i]);
+        }
+
+        return this.md5(str);
+    }
+
+    public Map<String, Object> map(Map<String, Object> input, String... except) {
+        Map<String, Object> map = new LinkedHashMap<>();
+
+        if (input == null) return map;
+
+        for (String key : input.keySet()) {
+            if (key.startsWith("__")) continue;
+            if (input.get(key).equals("")) continue;
+
+            if (except.length > 0 && ("," + StringUtils.join(Arrays.asList(except), ',') + ",").contains("," + key + ",")) continue;
+
+            // __like %_like _%like __gt __lt __ge __le
+
+            if (key.endsWith("##")) {
+                map.put("#" + key.substring(0, key.length() - 2), input.get(key));
+            } else if (key.endsWith("__like")) {
+                String field = key.substring(0, key.length() - 6);
+
+                if (field.equals("")) continue;
+
+                map.put("like#" + field, input.get(key));
+            } else if(key.endsWith("_%like")) {
+                String field = key.substring(0, key.length() - 6);
+
+                if (field.equals("")) continue;
+
+                map.put("like#" + field + "%", input.get(key));
+            } else if(key.endsWith("%_like")) {
+                String field = key.substring(0, key.length() - 6);
+
+                if (field.equals("")) continue;
+
+                map.put("like#%" + field, input.get(key));
+            } else {
+                if (!input.get(key).toString().contains(",")) {
+                    if (input.get(key).toString().contains("|")) {
+                        map.put("in#" + key, input.get(key).toString().split("\\|"));
+                    } else {
+                        map.put(key, input.get(key));
+                    }
+                } else {
+                    String cluster = "";
+                    int insert = 0;
+
+                    if (input.get(key).toString().contains("|")) {
+                        String[] sections = input.get(key).toString().split("\\|");
+
+                        map.put("^" + insert + "-" + key, "and (");
+
+                        for (String section : sections) {
+                            String[] condition = section.split(",");
+
+                            insert++;
+
+                            map.put("^" + insert + "-" + key, "or (");
+
+                            if (condition[0] != null && !condition[0].endsWith("-")) {
+                                cluster += "#";
+
+                                if (condition[0].startsWith("(")) {
+                                    map.put("and" + cluster + key + " >", condition[0].substring(1));
+                                } else {
+                                    map.put("and" + cluster + key + " >=", condition[0].substring(1));
+                                }
+                            }
+
+                            if (condition[1] != null && !condition[1].startsWith("+")) {
+                                cluster += "#";
+
+                                if (condition[1].endsWith(")")) {
+                                    map.put("and" + cluster + key + " <", condition[1].substring(0, condition[1].length() - 1));
+                                } else {
+                                    map.put("and" + cluster + key + " <=", condition[1].substring(0, condition[1].length() - 1));
+                                }
+                            }
+
+                            insert++;
+
+                            map.put("^" + insert + "-" + key, ")");
+                        }
+
+                        insert++;
+
+                        map.put("^" + insert + "-" + key, ")");
+                    } else {
+                        String[] condition = input.get(key).toString().split(",");
+
+                        if (condition[0] != null && !condition[0].endsWith("-")) {
+                            cluster += "#";
+
+                            if (condition[0].startsWith("(")) {
+                                map.put("and" + cluster + key + " >", condition[0].substring(1));
+                            } else {
+                                map.put("and" + cluster + key + " >=", condition[0].substring(1));
+                            }
+                        }
+
+                        if (condition[1] != null && !condition[1].startsWith("+")) {
+                            cluster += "#";
+
+                            if (condition[1].endsWith(")")) {
+                                map.put("and" + cluster + key + " <", condition[1].substring(0, condition[1].length() - 1));
+                            } else {
+                                map.put("and" + cluster + key + " <=", condition[1].substring(0, condition[1].length() - 1));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return map;
+    }
+
+    public Map<String, String> dim_map(String dim) {
+        Map<String, String> map = new LinkedHashMap<>();
+
+        if (dim.contains(":")) {
+            // 格式 {field}:{index},{level},{extra},{prev}
+            String[] arr = dim.split(":");
+
+            map.put("field", arr[0]);
+
+            String[] arr_1 = arr[1].split(",");
+
+            map.put("index", arr_1[0]);
+            map.put("level", arr_1.length > 1 ? arr_1[1] : "0");
+
+            map.put("extra", arr_1.length > 2 ? arr_1[2] : "");
+
+            map.put("prev", arr_1.length > 3 ? arr_1[3] : "");
+        } else {
+            String[] arr = dim.split("!");
+
+            map.put("field", arr[0]);
+            map.put("index", arr[0]);
+            map.put("level", "0");
+
+            if (arr.length > 1) {
+                // 注意这里是先配置 extra，再配置 prev，以“;”分割
+
+                String[] arr_1 = arr[1].split(";");
+
+                map.put("extra", arr_1[0]);
+
+                map.put("prev", arr_1.length > 1 ? arr_1[1] : "");
+            } else {
+                map.put("extra", "");
+
+                map.put("prev", "");
+            }
+
+            Pattern pattern = Pattern.compile("_\\d+$");
+            Matcher matcher = pattern.matcher(arr[0]);
+
+            if (matcher.find()) {
+                map.put("index", arr[0].substring(0, arr[0].length() - matcher.group().length()));
+                map.put("level", matcher.group().substring(1));
+            }
+        }
+
+        return map;
+    }
+
     public String path(String path) {
         return System.getProperty("user.dir") + java.io.File.separator + path.replace("/", java.io.File.separator);
+    }
+
+    public String base_url(String... uri) {
+        if (RequestContextHolder.getRequestAttributes() == null) return "";
+
+        HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+
+        String base_url = (request.getHeader("X-Forwarded-Scheme") == null ? request.getScheme() : request.getHeader("X-Forwarded-Scheme")) + "://" + request.getServerName() + (request.getServerPort() != 80 && request.getServerPort() != 443 ? ":" + request.getServerPort() : "");
+
+        return base_url + (uri.length > 0 ? uri[0] : "");
     }
 
     public String resource(String path, String... delimiters) {
@@ -297,13 +785,15 @@ public class Com {
     }
 
     public String rsa_at_time(String str, int allow_delay) {
-        String[] arr = this.rsa_decrypt(str).split("@");
+        str = this.rsa_decrypt(str);
 
-        if (arr.length < 2) return "";
+        if (!str.contains("@")) return "";
 
-        if (Math.abs(Integer.parseInt(arr[1]) - this.time()) > allow_delay) return "";
+        int pos = str.lastIndexOf("@");
 
-        return arr[0];
+        if (Math.abs(Integer.parseInt(str.substring(pos + 1)) - this.time()) > allow_delay) return "";
+
+        return str.substring(0, pos);
     }
 
     public String str_rand(String str,int len) {
@@ -397,5 +887,202 @@ public class Com {
         }
 
         return new String(tmp);
+    }
+
+    public String month_end(Object... obj) {
+        if (obj.length == 0) return "";
+
+        int year = 0;
+        int month = 1;
+        int at_day;
+        int up_day = 0;
+
+        if (obj.length == 1) {
+            if (obj[0] instanceof String) {
+                String[] fmt = ((String) obj[0]).split("-");
+
+                if (fmt.length < 2) return Integer.parseInt(fmt[0]) + "-12-31";
+
+                year = Integer.parseInt(fmt[0]);
+                month = Integer.parseInt(fmt[1]);
+
+                if (fmt.length > 2) up_day = Integer.parseInt(fmt[2]);
+            } else {
+                return obj[0].toString() + "-12-31";
+            }
+        }
+
+        if (obj.length > 1) {
+            if (obj[0] instanceof Integer) {
+                year = (int) obj[0];
+            } else if (obj[0] instanceof String) {
+                year = Integer.parseInt((String) obj[0]);
+            } else {
+                return "";
+            }
+
+            if (obj[1] instanceof Integer) {
+                month = (int) obj[1];
+            } else if (obj[1] instanceof String) {
+                month = Integer.parseInt((String) obj[1]);
+            } else {
+                return "";
+            }
+        }
+
+        if (obj.length > 2) {
+            if (obj[2] instanceof Integer) {
+                up_day = (int) obj[2];
+            } else if (obj[2] instanceof String) {
+                up_day = Integer.parseInt((String) obj[2]);
+            }
+        }
+
+        if (month < 1) month = 1;
+        if (month > 12) month = 12;
+
+        if (month == 2) {
+            if ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0) {
+                at_day = 29;
+            } else {
+                at_day = 28;
+            }
+        } else if (month <= 7) {
+            if (month % 2 == 1) {
+                at_day = 31;
+            } else {
+                at_day = 30;
+            }
+        } else {
+            if (month % 2 == 1) {
+                at_day = 30;
+            } else {
+                at_day = 31;
+            }
+        }
+
+        if (up_day > 0 && up_day < at_day) at_day = up_day;
+
+        return year + "-" + (month < 10 ? "0" : "") + month + "-" + (at_day < 10 ? "0" : "") + at_day;
+    }
+
+    public String last_month(String... months) {
+        String month = months.length > 0 ? months[0] : this.date("yyyy-MM");
+
+        String[] arr = month.split("-");
+
+        if (arr.length < 2) return "";
+
+        if (Integer.parseInt(arr[1]) == 1) {
+            arr[1] = "12";
+
+            arr[0] = (Integer.parseInt(arr[0]) - 1) + "";
+        } else {
+            arr[1] = String.format("%02d", Integer.parseInt(arr[1]) - 1);
+        }
+
+        return arr[0] + "-" + arr[1];
+    }
+
+    // 分布式部署请求分发
+    // 若指定host（主机号，即配置文件中host_id）则只转发当前请求到指定主机，不分发
+    // 分发模式下，将请求转发给不包含自身在内的集群内所有主机，返回true
+    // 转发模式下，若指定主机为自身，则不转发，返回false，否则返回true
+    public Map<String, Object> request_hand_out(Object... host) {
+        if (host_id.equals("0")) return api.err("非分布式部署，请求不需要转发或分发"); // 非分布式部署不需要分发或转发请求
+        if (this.http_get("no_hand").equals("1")) return api.err("请求包含禁止转发或分发标记");
+
+        String target_host = "0";
+
+        String uri = "";
+        String get = "";
+        String arg = "";
+
+        if (host.length > 0) {
+            if (check.is_natural_no_zero(host[0].toString())) {
+                target_host = host[0].toString();
+
+                if (host.length > 1) uri = host[1].toString();
+                if (host.length > 2) get = host[2].toString();
+                if (host.length > 3) arg = JSONObject.toJSONString(host[3]);
+            } else {
+                uri = host[0].toString();
+
+                if (host.length > 1) get = host[1].toString();
+                if (host.length > 2) arg = JSONObject.toJSONString(host[2]);
+            }
+        }
+
+        List<Map<String, String>> host_list;
+
+        if (!target_host.equals("0")) {
+            if (host_id.equals(target_host)) return api.err("目标主机为本机，不需要转发或分发请求");
+
+            host_list = db.table("sys_host").read("host_id,ip,port", "host_id", target_host);
+        } else {
+            host_list = db.table("sys_host").read("host_id,ip,port", "host_id!=", host_id);
+        }
+
+        HttpServletRequest request = ((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getRequest();
+
+        String token = request.getHeader("token");
+
+        Map<String, String> header = new LinkedHashMap<>();
+
+        header.put("Content-Type", "application/json");
+        header.put("Token", token);
+
+        String queryString = request.getQueryString();
+
+        if (queryString != null) {
+            try {
+                queryString = URLDecoder.decode(queryString, "UTF-8");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        if (uri.equals("")) {
+            uri = request.getRequestURI();
+            get = (queryString == null ? "" : queryString);
+
+            if (api.json().size() > 0) {
+                arg = JSONObject.toJSONString(api.json());
+            }
+        }
+
+        Map<String, Object> json = new LinkedHashMap<>();
+
+        int total = 0;
+        int count = 0;
+
+        List<Map<String, String>> failed_host_list = new ArrayList<>();
+
+        for (Map<String, String> host_item : host_list) {
+            Curl curl = new Curl("http://" + host_item.get("ip") + ":" + host_item.get("port") + uri + "?no_hand=1" + (get.equals("") ? "" : "&" + get))
+                    .headers(header);
+
+            if (!arg.equals("")) {
+                curl.opt("-d", arg);
+            }
+
+            json = curl.exec(jsonResolver,null);
+
+            total++;
+
+            if (!json.getOrDefault("out", "0").toString().equals("1")) {
+                count++;
+
+                Map<String, Object> finalJson = json;
+                Map<String, String> failed_host = new LinkedHashMap<String, String>(){{
+                    put("host_id", host_item.get("host_id"));
+                    put("host_err", finalJson.get("msg").toString());
+                }};
+
+                failed_host_list.add(failed_host);
+            }
+        }
+
+        return total == 1 ? json : (count == 0 ? json : api.err("请求分发后，有" + count + "台主机返回执行错误", failed_host_list));
     }
 }

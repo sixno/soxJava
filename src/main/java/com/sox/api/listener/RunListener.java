@@ -1,5 +1,6 @@
 package com.sox.api.listener;
 
+import com.sox.api.service.Log;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
@@ -10,10 +11,17 @@ public class RunListener implements ApplicationListener<ApplicationReadyEvent> {
     @Autowired
     private InitializeListener initializeListener;
 
+    @Autowired
+    private Log log;
+
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
-        System.out.println("System is ready...");
+        if (initializeListener.runnable) {
+            log.msg("System is ready...", 0);
+        } else {
+            log.msg("System initialization failed... it will stop running...", 0);
 
-        if (!initializeListener.runnable) System.exit(0);
+            System.exit(0);
+        }
     }
 }

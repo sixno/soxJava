@@ -1,12 +1,10 @@
 package com.sox.api.service;
 
 import org.apache.commons.io.FileUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -14,6 +12,9 @@ import java.util.Objects;
 
 @Service
 public class Disk {
+    @Autowired
+    private Log log;
+
     public String get_contents(String path) {
         if (!path.startsWith("http://") && !path.startsWith("https://")) {
             File file = new File(path);
@@ -121,7 +122,7 @@ public class Disk {
     public boolean del(String path) {
         File file = new File(path);
         if (!file.exists()) {
-            System.out.println("删除失败:" + path + "不存在！");
+            log.msg("删除失败:" + path + "不存在！", 4);
             return false;
         } else {
             if (file.isFile())
@@ -136,14 +137,14 @@ public class Disk {
 
         if (file.exists() && file.isFile()) {
             if (file.delete()) {
-                System.out.println("删除文件" + path + "成功！");
+                log.msg("删除文件" + path + "成功！", 4);
                 return true;
             } else {
-                System.out.println("删除文件" + path + "失败！");
+                log.msg("删除文件" + path + "失败！", 4);
                 return false;
             }
         } else {
-            System.out.println("删除文件失败：" + path + "不存在！");
+            log.msg("删除文件失败：" + path + "不存在！", 4);
             return false;
         }
     }
@@ -154,7 +155,7 @@ public class Disk {
         File dirFile = new File(path);
 
         if ((!dirFile.exists()) || (!dirFile.isDirectory())) {
-            System.out.println("删除目录失败：" + path + "不存在！");
+            log.msg("删除目录失败：" + path + "不存在！", 4);
             return false;
         }
 
@@ -178,15 +179,41 @@ public class Disk {
             }
         }
         if (!flag) {
-            System.out.println("删除目录失败！");
+            log.msg("删除目录失败！", 4);
             return false;
         }
+
         // 删除当前目录
         if (dirFile.delete()) {
-            System.out.println("删除目录" + path + "成功！");
+            log.msg("删除目录" + path + "成功！", 4);
             return true;
         } else {
             return false;
+        }
+    }
+
+    public void copy_file(String src, String dist) {
+        try {
+            // 复制文件
+            // FileInputStream fis = new FileInputStream(src);
+            // FileOutputStream fos = new FileOutputStream(dist);
+
+            // byte[] data = new byte[1024 * 8];
+
+            // int len = fis.read(data);
+
+            // while (len != -1) {
+            //    fos.write(data, 0, len);
+
+            //     len = fis.read(data);
+            // }
+
+            // fis.close();
+            // fos.close();
+
+            FileUtils.copyFile(new File(src), new File(dist));
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }

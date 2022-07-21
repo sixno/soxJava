@@ -1,14 +1,11 @@
 package com.sox.api.quartz.utils;
 
+import com.sox.api.utils.CastUtils;
 import org.quartz.*;
-import org.quartz.impl.triggers.CronTriggerImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.List;
 
 @Service
 public class QuartzManager {
@@ -37,7 +34,7 @@ public class QuartzManager {
         }
 
         try {
-            job_class = (Class<? extends Job>) (Class.forName(path).newInstance().getClass());
+            job_class = CastUtils.cast(Class.forName(path).newInstance().getClass());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -45,13 +42,34 @@ public class QuartzManager {
         JobDetail jobDetail = JobBuilder.newJob(job_class).withIdentity(job_key).build();
 
         if (arg.length > 0) {
-            for (String str : arg[0].split(";")) {
-                if(str.trim().equals("")) continue;
+            String pre_key = "";
 
-                String[] arr = str.trim().split(":");
+            for (String ars : arg) {
+                if (pre_key.equals("")) {
+                    if (ars.contains(":")) {
+                        for (String str : ars.split(";")) {
+                            if(str.trim().equals("")) continue;
 
-                jobDetail.getJobDataMap().put(arr[0], arr[1]);
+                            str = str.trim();
+
+                            int pos = str.indexOf(":");
+
+                            jobDetail.getJobDataMap().put(str.substring(0, pos), str.substring(pos + 1));
+                        }
+                    } else {
+                        pre_key = ars;
+                    }
+                } else {
+                    jobDetail.getJobDataMap().put(pre_key, ars);
+
+                    pre_key = "";
+                }
             }
+
+            if (!pre_key.equals("")) {
+                jobDetail.getJobDataMap().put(pre_key, "");
+            }
+
         }
 
         Trigger trigger = this.build_trigger(trigger_key, cron_exp);
@@ -90,7 +108,7 @@ public class QuartzManager {
     }
 
     // 暂停作业
-    public void off_job(String job_name, String job_group) {
+    public void pause_job(String job_name, String job_group) {
         JobKey job_key = job_key(job_name, job_group);
 
         try {
@@ -101,7 +119,7 @@ public class QuartzManager {
     }
 
     // 恢复作业
-    public void rub_job(String job_name, String job_group) {
+    public void start_job(String job_name, String job_group) {
         JobKey job_key = job_key(job_name, job_group);
 
         try {
@@ -128,25 +146,16 @@ public class QuartzManager {
         Trigger trigger = null;
 
         if (!cron_exp.equals("")) {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-
-            CronTriggerImpl cronTriggerImpl = new CronTriggerImpl();
-
             try {
-                cronTriggerImpl.setCronExpression(cron_exp);
+                CronExpression cronExpression = new CronExpression(cron_exp);
 
-                List<Date> dates = TriggerUtils.computeFireTimesBetween(cronTriggerImpl, null, new Date(), new Date((new Date()).getTime() + 63072000000L));
-
-                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-
-                String nextTime = dateFormat.format(dates.get(0));
-
-                Date date = dateFormat.parse(nextTime);
+                // 通过 cron 表达式获取下一次任务执行时间
+                Date date = cronExpression.getNextValidTimeAfter(new Date());
 
                 trigger = TriggerBuilder.newTrigger().withIdentity(triggerKey)
                         .startAt(date)
                         .withSchedule(CronScheduleBuilder.cronSchedule(cron_exp)).build();
-            } catch (ParseException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         } else {

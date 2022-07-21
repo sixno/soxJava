@@ -49,64 +49,64 @@ public class Curl {
 
     private static final Map<String, Integer> optMap = Util.mapPut(new LinkedHashMap<String, Integer>(),
             "-E", 32,
-            "--cert", 32, 					// <certificate[:password]> Client certificate file and password
-            "--compressed", 1, 				// Request compressed response (using deflate or gzip)
-            "--connect-timeout", 2, 		// SECONDS  Maximum time allowed for connection
+            "--cert", 32, 					    // <certificate[:password]> Client certificate file and password
+            "--compressed", 1, 				    // Request compressed response (using deflate or gzip)
+            "--connect-timeout", 2, 		    // SECONDS  Maximum time allowed for connection
             "-b", 3,
-            "--cookie", 3, 					// STRING/FILE  Read cookies from STRING/FILE (H)
+            "--cookie", 3, 					    // STRING/FILE  Read cookies from STRING/FILE (H)
             "-c", 4,
-            "--cookie-jar", 4, 				// FILE  Write cookies to FILE after operation (H)
+            "--cookie-jar", 4, 				    // FILE  Write cookies to FILE after operation (H)
             "-d", 5,
-            "--data", 5, 					// DATA	 HTTP POST data (H)
-            "--data-ascii", 5, 				// DATA	 HTTP POST ASCII data (H)
-            "--data-raw", 51, 				// DATA	 HTTP POST raw data (H)
-            "--data-binary", 52, 			// DATA	 HTTP POST binary data (H)
-            "--data-urlencode", 53, 		// DATA	 HTTP POST data url encoded (H)
+            "--data", 5, 					    // DATA	 HTTP POST data (H)
+            "--data-ascii", 5, 				    // DATA	 HTTP POST ASCII data (H)
+            "--data-raw", 51, 				    // DATA	 HTTP POST raw data (H)
+            "--data-binary", 52, 			    // DATA	 HTTP POST binary data (H)
+            "--data-urlencode", 53, 		    // DATA	 HTTP POST data url encoded (H)
             "-D", 6,
-            "--dump-header", 6, 			// FILE  Write the headers to FILE
+            "--dump-header", 6, 			    // FILE  Write the headers to FILE
             "-F", 7,
-            "--form", 7, 					// CONTENT  Specify HTTP multipart POST data (H)
-            "--form-string", 71,			// STRING  Specify HTTP multipart POST data (H)
+            "--form", 7, 					    // CONTENT  Specify HTTP multipart POST data (H)
+            "--form-string", 71,			    // STRING  Specify HTTP multipart POST data (H)
             "-G", 8,
-            "--get", 8, 					// Send the -d data with a HTTP GET (H)
+            "--get", 8, 					    // Send the -d data with a HTTP GET (H)
             "-H", 10,
-            "--header", 10, 				// LINE   Pass custom header LINE to server (H)
+            "--header", 10, 				    // LINE   Pass custom header LINE to server (H)
             "-I", 11,
-            "--head", 11, 					// Show document info only
-//			"--ignore-content-length", 12, // Ignore the HTTP Content-Length header
+            "--head", 11, 					    // Show document info only
+			// "--ignore-content-length", 12,   // Ignore the HTTP Content-Length header
             "-k", 31,
-            "--insecure", 31,				// Allow insecure server connections when using SSL
+            "--insecure", 31,				    // Allow insecure server connections when using SSL
             "-L", 13,
-            "--location", 13, 				// Follow redirects (H)
+            "--location", 13, 			    	// Follow redirects (H)
             "-m", 14,
-            "--max-time", 14, 				// SECONDS  Maximum time allowed for the transfer
-//			"--no-keepalive", 15, 			// Disable keepalive use on the connection
+            "--max-time", 14, 			    	// SECONDS  Maximum time allowed for the transfer
+			// "--no-keepalive", 15, 	    	// Disable keepalive use on the connection
             "-o", 16,
-            "--output", 16, 				// FILE   Write to FILE instead of stdout
+            "--output", 16, 			    	// FILE   Write to FILE instead of stdout
             "-x", 17,
-            "--proxy", 17, 					// [PROTOCOL://]HOST[:PORT]  Use proxy on given port
+            "--proxy", 17, 				    	// [PROTOCOL://]HOST[:PORT]  Use proxy on given port
             "-U", 18,
-            "--proxy-user", 18, 			// USER[:PASSWORD]  Proxy user and password
+            "--proxy-user", 18, 		    	// USER[:PASSWORD]  Proxy user and password
             "-e", 19,
-            "--referer", 19, 				// Referer URL (H)
-            "--retry", 20, 					// NUM   Retry request NUM times if transient problems occur
-            "--retry-delay", 21, 			// SECONDS  Wait SECONDS between retries
-            "--retry-max-time", 22, 		// SECONDS  Retry only within this period
+            "--referer", 19, 			    	// Referer URL (H)
+            "--retry", 20, 				    	// NUM   Retry request NUM times if transient problems occur
+            "--retry-delay", 21, 		    	// SECONDS  Wait SECONDS between retries
+            "--retry-max-time", 22, 	    	// SECONDS  Retry only within this period
             "-s", 23,
-            "--silent", 23, 				// Silent mode (don't output anything)
-            "--stderr", 24, 				// FILE   Where to redirect stderr (use "-" for stdout)
+            "--silent", 23, 			    	// Silent mode (don't output anything)
+            "--stderr", 24, 			    	// FILE   Where to redirect stderr (use "-" for stdout)
             "-u", 28,
-            "--user", 28, 					// USER[:PASSWORD]  Server user and password
-            "--url", 25, 					// URL	   URL to work with
+            "--user", 28, 				    	// USER[:PASSWORD]  Server user and password
+            "--url", 25, 				    	// URL	   URL to work with
             "-A", 26,
-            "--user-agent", 26, 			// STRING  Send User-Agent STRING to server (H)
+            "--user-agent", 26, 		    	// STRING  Send User-Agent STRING to server (H)
             "-X", 27,
-            "--request", 27,				// COMMAND  Specify request command to use
-            "--x-max-download", 29,			// BYTES Maximum bytes allowed for the download
-            "--x-tags", 30,					// DATA extra key-value pairs, storage only
-            "--verbose", 33,				// Verbose
-            "-v", 33,						// Verbose
-            "", 0 // placeholder
+            "--request", 27,			    	// COMMAND  Specify request command to use
+            "--x-max-download", 29,		    	// BYTES Maximum bytes allowed for the download
+            "--x-tags", 30,				    	// DATA extra key-value pairs, storage only
+            "--verbose", 33,			    	// Verbose
+            "-v", 33,					    	// Verbose
+            "", 0                               // placeholder
     );
 
     private static final String BOUNDARY = "------------aia113jBkadk7289";
@@ -604,7 +604,7 @@ public class Curl {
         float connectTimeout = 0, maxTime = 0, retryDelay = 0, retryMaxTime = 0;
         int retry = 0, maxDownload = 0;
         boolean location = false, silent = false, mergeData = false, insecure = false;
-//		boolean ignoreContentLength = false, noKeepAlive = false;
+		// boolean ignoreContentLength = false, noKeepAlive = false;
         Util.mapPut(headers, "Accept", "*/*", "User-Agent", DEFAULT_USER_AGENT);
         iomap.put("-", stdout);
         Throwable lastEx = null;
@@ -711,18 +711,18 @@ public class Curl {
                 case 11: // --head  Show document info only
                     method = "HEAD";
                     break;
-//                case 12: // --ignore-content-length  Ignore the HTTP Content-Length header
-//                    ignoreContentLength = true;
-//                    break;
+                // case 12: // --ignore-content-length  Ignore the HTTP Content-Length header
+                //       ignoreContentLength = true;
+                //       break;
                 case 13: // --location  Follow redirects (H)
                     location = true;
                     break;
                 case 14: // --max-time  SECONDS  Maximum time allowed for the transfer
                     maxTime = Float.parseFloat(options.get(++i));
                     break;
-//                case 15: // --no-keepalive  Disable keepalive use on the connection
-//                    noKeepAlive = true;
-//                    break;
+                // case 15: // --no-keepalive  Disable keepalive use on the connection
+                //     noKeepAlive = true;
+                //     break;
                 case 16: // --output  FILE   Write to FILE instead of stdout
                     output = getIO(options.get(++i));
                     break;
@@ -808,7 +808,7 @@ public class Curl {
             if (method == null) method = "POST";
         }
         if (method == null) method = "GET";
-//		if (!noKeepAlive) headers.put("Connection", "keep-alive");
+		// if (!noKeepAlive) headers.put("Connection", "keep-alive");
         if (cookie != null) { // --cookie '' will clear the CookieStore
             cookieStore.removeAll();
             if (cookie.indexOf('=') > 0) {
@@ -913,7 +913,7 @@ public class Curl {
                         data = os.toByteArray();
                     } else {
                         data = Util.s2b(dataStr, null); // UTF-8
-//						if (!ignoreContentLength) {
+						// if (!ignoreContentLength) {
                         con.setRequestProperty("Content-Length", Integer.toString(data.length));
                         if (!headers.containsKey("Content-Type")) {
                             con.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
@@ -1801,7 +1801,7 @@ public class Curl {
 
     }
 
-//    public static void main(String[] args) {
-//        System.out.println(new Curl().opt(args).exec(null));
-//    }
+    // public static void main(String[] args) {
+    //     System.out.println(new Curl().opt(args).exec(null));
+    // }
 }

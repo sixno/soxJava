@@ -2,6 +2,7 @@ package com.sox.api.interceptor;
 
 import com.sox.api.service.Api;
 import com.sox.api.service.Com;
+import com.sox.api.service.Log;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,9 @@ public class AlwaysInterceptor implements HandlerInterceptor {
 
     @Autowired
     private Com com;
+
+    @Autowired
+    private Log log;
 
     long start = System.currentTimeMillis();
 
@@ -66,6 +70,28 @@ public class AlwaysInterceptor implements HandlerInterceptor {
                 }
             }
 
+            // 超级用户
+            CheckSuper checkSuper = handlerMethod.getMethod().getAnnotation(CheckSuper.class);
+
+            if (checkSuper == null) {
+                checkSuper = handlerMethod.getMethod().getDeclaringClass().getAnnotation(CheckSuper.class);
+            }
+
+            if (checkSuper != null) {
+                if (!("," + checkSuper.except() + ",").contains("," + handlerMethod.getMethod().getName() + ",")) {
+                    if (!com.check_super()) {
+                        api.set("out", "0");
+                        api.set("msg", "当前功能为超级用户专属功能，其他用户不能执行");
+
+                        api.set("code", "1002");
+
+                        api.output();
+
+                        return false;
+                    }
+                }
+            }
+
             // 权限拦截
             CheckAuth checkAuth = handlerMethod.getMethod().getAnnotation(CheckAuth.class);
 
@@ -100,7 +126,8 @@ public class AlwaysInterceptor implements HandlerInterceptor {
         api.req.remove();
         api.res.remove();
 
-        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        com.http_get.remove();
+        com.http_post.remove();
 
         String queryString = request.getQueryString();
 
@@ -112,7 +139,7 @@ public class AlwaysInterceptor implements HandlerInterceptor {
             }
         }
 
-        System.out.println("[" + df.format(new Date()) + "] [" + request.getRequestURI() + (queryString == null ? "" : "?" + queryString) + "] Response time: " + (System.currentTimeMillis() - start) + "ms");
+        log.msg("[" + request.getRequestURI() + (queryString == null ? "" : "?" + queryString) + "] Response time: " + (System.currentTimeMillis() - start) + "ms", 1);
     }
 
     @Override
