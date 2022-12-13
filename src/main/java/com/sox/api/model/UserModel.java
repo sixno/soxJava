@@ -7,8 +7,6 @@ import com.sox.api.service.Db;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -31,6 +29,9 @@ public class UserModel {
     @Autowired
     public RoleModel role_m;
 
+    @Autowired
+    public ConfModel conf_m;
+
     public Db db;
 
     @Autowired
@@ -43,7 +44,7 @@ public class UserModel {
 
     public String auth_table = "sys_user_auth";
 
-    public String field = "sys_user.id,lv,sex,name,cname,avatar,company,dept,post,phone,email,inviter,creator,sys_user.create_time,active_time,disabled,auto_syn,sys_user.update_time";
+    public String field = "sys_user.id,lv,sex,code,name,avatar,company,dept,post,phone,email,inviter,reviser,creator,sys_user.create_time,active_time,disabled,auto_syn,sys_user.update_time";
 
     Map<String, String> disabled_state = new LinkedHashMap<String, String>(){{
         put("0", "启用");
@@ -65,9 +66,12 @@ public class UserModel {
             if (key.equals("post")) item.put("post_state", code_m.state("post", data.get(key), 0));
 
             if (key.equals("dept")) {
+                item.put("dept_look", conf_m.get("dept_look", "0"));
+
                 ArrayList<String> d_no = new ArrayList<>();
                 ArrayList<String> dept = new ArrayList<>();
-                String is_through = "0";
+                String dept_extra = ""; // 所属机构是否为经营性机构，经营性机构只能查看自身穿透数据
+                String dept_no_ex = ""; // 经营性机构编号
                 String dept_no_last = "";
                 String dept_state_last = "";
 
@@ -78,16 +82,20 @@ public class UserModel {
 
                         d_no.add(dept_no_last);
                         dept.add(dept_state_last);
+
+                        Map<String, String> dept_state = code_m.state.get("dept_0").get(dept_no_last);
+
+                        if (dept_state != null && dept_state.get("extra").contains("1")) {
+                            dept_extra = "1";
+                            dept_no_ex = dept_no_last;
+                        }
                     }
-
-                    Map<String, String> dept_state = code_m.state.get("dept_0").get(dept_no_last);
-
-                    if (dept_state != null && dept_state.get("extra").equals("1")) is_through = "1";
                 }
 
                 item.put("dept_no", d_no);
                 item.put("dept_state", dept);
-                item.put("is_through", is_through);
+                item.put("dept_extra", dept_extra);
+                item.put("dept_no_ex", dept_no_ex);
                 item.put("dept_no_last", dept_no_last);
                 item.put("dept_state_last", dept_state_last);
             }
@@ -102,7 +110,7 @@ public class UserModel {
                 item.put("creator_data", creator_data);
             }
 
-            item.put("super", data.get("id").equals(super_user) ? "1" : "0");
+            item.put("is_super", data.get("id").equals(super_user) ? "1" : "0");
         }
 
         String role_state = "";
@@ -185,7 +193,9 @@ public class UserModel {
     }
 
     public void set_session(String id, String line, String remember) {
-        HttpServletResponse response = Objects.requireNonNull(((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getResponse());
+        HttpServletResponse response = com.http_response.get();
+
+        if (response == null) return;
 
         response.setHeader("Access-Control-Expose-Headers", "Content-Type, Token");
         response.setHeader("Token", (remember.equals("") ? "0" : remember.substring(0, 1)) + com.str_encrypt(id + "," + line, this.sess_seed));
@@ -194,7 +204,9 @@ public class UserModel {
     public String get_session(String key) {
         Map<String, String> sess_data = new LinkedHashMap<>();
 
-        HttpServletRequest request = ((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getRequest();
+        HttpServletRequest request = com.http_request.get();
+
+        if (request == null) return "";
 
         String token = request.getHeader("token");
 
@@ -226,7 +238,9 @@ public class UserModel {
     }
 
     public void del_session() {
-        HttpServletResponse response = Objects.requireNonNull(((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getResponse());
+        HttpServletResponse response = com.http_response.get();
+
+        if (response == null) return;
 
         response.setHeader("Access-Control-Expose-Headers", "Content-Type, Token");
         response.setHeader("Token", "");

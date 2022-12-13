@@ -38,7 +38,7 @@ public class TaskController {
     private Check check;
 
     @RequestMapping("/statistics")
-    public Map<String, Object> statistics() {
+    public Api.Res statistics() {
         Map<String, Object> data = new LinkedHashMap<>();
         
         data.put("task_running", task_m.db.count("status", "1"));
@@ -48,26 +48,29 @@ public class TaskController {
     }
 
     @RequestMapping("/list")
-    public Map<String, Object> list() {
-        Map<String, Object> dict = new LinkedHashMap<>();
+    public Api.Res list() {
+        Map<String, Object> map = com.map(api.arg());
 
-        Map<String, Long> line = api.line(20);
-
-        Map<String, Object> map = new LinkedHashMap<>();
-
-        if (line.get("rows") == 0) line.put("rows", task_m.list_count(map));
-
-        if (line.get("page") == 0) {
-            line.put("page", (long)Math.ceil((double)line.get("rows") / (double)line.get("size")));
+        if (!api.arg("__search").equals("")) {
+            map.put("like#name,group,descr", api.arg("__search"));
         }
 
-        map.put("#limit", line.get("size") + "," + ((line.get("page") - 1) * line.get("size")));
+        Api.Line line = api.line(20);
 
-        List<Map<String, Object>> list = task_m.list(map);
+        if (line.rows == 0) line.rows = task_m.list_count(map);
+        if (line.page == 0) line.page = api.page(line);
 
         api.set_line(line);
 
+        map.put("#limit", line);
+
+        List<Map<String, Object>> list = task_m.list(map);
+
         api.set_dict("is_dcs", host_id.equals("0") ? "0" : "1");
+
+        Long cur_num = task_m.db.count("status", "1");
+
+        api.set_dict("cur_num", cur_num.toString());
 
         if (list.size() > 0) {
             return api.put(list);
@@ -77,8 +80,8 @@ public class TaskController {
     }
 
     @RequestMapping("/item")
-    public Map<String, Object> item() {
-        String task_id = api.json("task_id");
+    public Api.Res item() {
+        String task_id = api.arg("task_id");
 
         api.set_dict("is_dcs", host_id.equals("0") ? "0" : "1");
 
@@ -86,8 +89,10 @@ public class TaskController {
     }
 
     @RequestMapping("/add")
-    public Map<String, Object> add() {
-        Map<String, String> data = api.json(null);
+    public Api.Res add() {
+        Map<String, String> data = api.arg();
+
+        if (data.get("auto").equals("1") && task_m.next_scheduled_time(data.getOrDefault("cron_exp", "")).equals("")) return api.err("定时设置的cron表达式有误");
 
         data.put("user_id", user_m.get_session("id"));
 
@@ -96,7 +101,7 @@ public class TaskController {
         check.validate("group", "任务组", "required");
         check.validate("name", "任务名", "required");
 
-        if (check.result) {
+        if (check.result.get()) {
             if (data.get("group").equals("system")) return api.err("“system”任务组不能手动添加");
 
             data.put("host_id", host_id);
@@ -113,15 +118,15 @@ public class TaskController {
                 return api.err("任务添加失败，请检查“任务名-任务组”组合是否唯一");
             }
         } else {
-            api.set("err", check.errors);
+            api.set("err", check.errors.get());
 
-            return api.err(check.error);
+            return api.err(check.error.get());
         }
     }
 
     @RequestMapping("/mod")
-    public Map<String, Object> mod() {
-        String task_id = api.json("task_id");
+    public Api.Res mod() {
+        String task_id = api.arg("task_id");
 
         Map<String, String> task_data = task_m.db.find("*", "id", task_id);
 
@@ -133,13 +138,15 @@ public class TaskController {
 
         Map<String, String> data = new LinkedHashMap<>();
 
-        for (String key : api.json().keySet()) {
+        for (String key : api.arg().keySet()) {
             if (key.equals("task_id")) continue;
 
-            data.put(key, api.json(key));
+            data.put(key, api.arg(key));
         }
 
         if (task_data.get("host_id").equals("0")) data.put("host_id", host_id);
+
+        if (data.get("auto").equals("1") && task_m.next_scheduled_time(data.getOrDefault("cron_exp", "")).equals("")) return api.err("定时设置的cron表达式有误");
 
         if (task_m.mod(task_id, data) > 0) {
             Map<String, Object> item = task_m.item(task_id);
@@ -157,8 +164,8 @@ public class TaskController {
     }
 
     @RequestMapping("/del")
-    public Map<String, Object> del() {
-        String task_id = api.json("task_id");
+    public Api.Res del() {
+        String task_id = api.arg("task_id");
 
         Map<String, String> task_data = task_m.db.find("*", "id", task_id);
 
@@ -174,16 +181,16 @@ public class TaskController {
     }
 
     @RequestMapping("/run")
-    public Map<String, Object> run(String task_id, String... manual_arg) {
+    public Api.Res run(String task_id, String... manual_arg) {
         // 此接口只能在有http请求的地方调用（即不能在涉及后台任务的进程中调用，会由于获取不到请求参数报错 - 20211201）
-        if (task_id == null) task_id = api.json("task_id");
+        if (task_id == null) task_id = api.arg("task_id");
 
         String manual = "";
 
         if (manual_arg != null && manual_arg.length > 0) manual = manual_arg[0];
 
-        if (manual.equals("") && !api.json("manual").equals("")) {
-            manual = api.json("manual");
+        if (manual.equals("") && !api.arg("manual").equals("")) {
+            manual = api.arg("manual");
         }
 
         Map<String, String> task_data = task_m.db.find("*", "id", task_id);

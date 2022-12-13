@@ -1,5 +1,6 @@
 package com.sox.api.service;
 
+import com.sox.api.utils.CastUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -15,86 +16,96 @@ public class Check {
     @Autowired
     private Db db;
 
-    public boolean result = true;
-    public String  error  = "";
-    public Map<String, String> data = new LinkedHashMap<>();
+    public Map<String, String> err_tp = new LinkedHashMap<String, String>(){{
+        put("required",     "%s为必填项");
+        put("min_length",   "%s至少%s位");
+        put("max_length",   "%s最多%s位");
+        put("exact_length", "%s必须%s位");
+        put("is_unique",    "%s已存在");
+    }};
 
-    public Map<String, String> errors = new LinkedHashMap<>();
-    public Map<String, String> err_tp = new LinkedHashMap<>();
+    public final ThreadLocal<Map<String, String>> data = ThreadLocal.withInitial(LinkedHashMap::new);
 
-    public Check() {
-        err_tp.put("required",     "%s为必填项");
-        err_tp.put("min_length",   "%s至少%s位");
-        err_tp.put("max_length",   "%s最多%s位");
-        err_tp.put("exact_length", "%s必须%s位");
-        err_tp.put("is_unique",    "%s已存在");
-    }
+    public final ThreadLocal<String> error = ThreadLocal.withInitial(() -> "");
+
+    public final ThreadLocal<Boolean> result = ThreadLocal.withInitial(() -> true);
+
+    public final ThreadLocal<Map<String, String>> errors = ThreadLocal.withInitial(LinkedHashMap::new);
 
     public void reset() {
-        result = true;
-        errors = new LinkedHashMap<>();
+        result.set(true);
 
-        error = "";
+        errors.set(new LinkedHashMap<>());
 
-        data = new LinkedHashMap<>();
+        error.set("");
+
+        data.set(new LinkedHashMap<>());
     }
 
     public void reset(Map<String, String> input) {
         this.reset();
 
-        data = input;
+        data.set(input);
     }
 
     public boolean required(String value, String... other) {
         boolean current = !value.equals("");
 
-        if (!current && other.length > 0) this.set_error("required", other);
+        if (!current && other.length > 0) {
+            this.set_error("required", other);
 
-        result = other.length > 0 ? result && current : current;
+            result.set(false);
+        }
 
-        return result;
+        return current;
     }
 
-    public boolean min_length(String value, int num, String... other) {
+    public boolean min_length(String value, Integer num, String... other) {
         if (other.length > 0 && value.equals("")) return true;
 
         boolean current = value.length() >= num;
 
         if (other.length == 1) other[0] += "," + num;
 
-        if (!current && other.length > 0) this.set_error("min_length", other);
+        if (!current && other.length > 0) {
+            this.set_error("min_length", other);
 
-        result = other.length > 0 ? result && current : current;
+            result.set(false);
+        }
 
-        return result;
+        return current;
     }
 
-    public boolean max_length(String value, int num, String... other) {
+    public boolean max_length(String value, Integer num, String... other) {
         if (other.length > 0 && value.equals("")) return true;
 
         boolean current = value.length() <= num;
 
         if (other.length == 1) other[0] += "," + num;
 
-        if (!current && other.length > 0) this.set_error("max_length", other);
+        if (!current && other.length > 0) {
+            this.set_error("max_length", other);
 
-        result = other.length > 0 ? result && current : current;
+            result.set(false);
+        }
 
-        return result;
+        return current;
     }
 
-    public boolean exact_length(String value, int num, String... other) {
+    public boolean exact_length(String value, Integer num, String... other) {
         if (other.length > 0 && value.equals("")) return true;
 
         boolean current = value.length() == num;
 
         if (other.length == 1) other[0] += "," + num;
 
-        if (!current && other.length > 0) this.set_error("exact_length", other);
+        if (!current && other.length > 0) {
+            this.set_error("exact_length", other);
 
-        result = other.length > 0 ? result && current : current;
+            result.set(false);
+        }
 
-        return result;
+        return current;
     }
 
     public boolean is_unique(String value, String table, String field, String... other) {
@@ -110,11 +121,13 @@ public class Check {
 
         boolean current = !(db.table(table).count(map) > 0) || value.equals("");
 
-        if (!current && other.length > 0) this.set_error("is_unique", other);
+        if (!current && other.length > 0) {
+            this.set_error("is_unique", other);
 
-        result = other.length > 0 ? result && current : current;
+            result.set(false);
+        }
 
-        return result;
+        return current;
     }
 
     public boolean numeric(String value, String... other) {
@@ -124,11 +137,13 @@ public class Check {
 
         boolean current = matcher.matches();
 
-        if (!current && other.length > 0) this.set_error("numeric", other);
+        if (!current && other.length > 0) {
+            this.set_error("numeric", other);
 
-        result = other.length > 0 ? result && current : current;
+            result.set(false);
+        }
 
-        return result;
+        return current;
     }
 
     public boolean integer(String value, String... other) {
@@ -138,11 +153,13 @@ public class Check {
 
         boolean current = matcher.matches();
 
-        if (!current && other.length > 0) this.set_error("integer", other);
+        if (!current && other.length > 0) {
+            this.set_error("integer", other);
 
-        result = other.length > 0 ? result && current : current;
+            result.set(false);
+        }
 
-        return result;
+        return current;
     }
 
     public boolean decimal(String value, String... other) {
@@ -152,11 +169,13 @@ public class Check {
 
         boolean current = matcher.matches();
 
-        if (!current && other.length > 0) this.set_error("decimal", other);
+        if (!current && other.length > 0) {
+            this.set_error("decimal", other);
 
-        result = other.length > 0 ? result && current : current;
+            result.set(false);
+        }
 
-        return result;
+        return current;
     }
 
     public boolean is_natural(String value, String... other) {
@@ -166,11 +185,13 @@ public class Check {
 
         boolean current = matcher.matches();
 
-        if (!current && other.length > 0) this.set_error("is_natural", other);
+        if (!current && other.length > 0) {
+            this.set_error("is_natural", other);
 
-        result = other.length > 0 ? result && current : current;
+            result.set(false);
+        }
 
-        return result;
+        return current;
     }
 
     public boolean is_natural_no_zero(String value, String... other) {
@@ -182,11 +203,13 @@ public class Check {
 
         boolean current = matcher.matches();
 
-        if (!current && other.length > 0) this.set_error("is_natural_no_zero", other);
+        if (!current && other.length > 0) {
+            this.set_error("is_natural_no_zero", other);
 
-        result = other.length > 0 ? result && current : current;
+            result.set(false);
+        }
 
-        return result;
+        return current;
     }
 
     private void set_error(String rule_name, String[] other) {
@@ -194,18 +217,19 @@ public class Check {
             Object[] field = other[0].split(",");
             String   value = String.format(err_tp.get(rule_name), field);
 
-            if (error.equals("")) error = value;
+            if (error.get().equals("")) error.set(value);
 
-            errors.putIfAbsent(field[0].toString(), value);
+            errors.get().putIfAbsent(field[0].toString(), value);
         } else if (other.length == 2) {
-            if (error.equals("")) error = other[1];
+            if (error.get().equals("")) error.set(other[1]);
 
-            errors.putIfAbsent(other[0], other[1]);
+            errors.get().putIfAbsent(other[0], other[1]);
         }
     }
 
     public void validate(String key, String field, String rules, String... ext) {
         String def = "";
+
         Map<String, String> tpl = new LinkedHashMap<>();
 
         String[] rule_arr = rules.split("\\|");
@@ -229,7 +253,7 @@ public class Check {
             }
         }
 
-        String value = key.equals("") ? def : data.getOrDefault(key, def);
+        String value = key.equals("") ? def : data.get().getOrDefault(key, def);
 
         if (value == null) return ;
 
@@ -246,29 +270,25 @@ public class Check {
 
             String[] other = other_arr.toArray(new String[0]);
 
-            switch (arg[0]) {
-                case "required":
-                    result = this.required(value, other);
-                    break;
+            try {
+                switch (arg[0]) {
+                    case "required":
+                        CastUtils.call(this, arg[0], value, other);
+                        break;
 
-                case "min_length":
-                    result = this.min_length(value, Integer.parseInt(arg[1]), other);
-                    break;
+                    case "min_length":
+                    case "max_length":
+                    case "exact_length":
+                        CastUtils.call(this, arg[0], value, Integer.parseInt(arg[1]), other);
+                        break;
 
-                case "max_length":
-                    result = this.max_length(value, Integer.parseInt(arg[1]), other);
-                    break;
-
-                case "exact_length":
-                    result = this.exact_length(value, Integer.parseInt(arg[1]), other);
-                    break;
-
-                case "is_unique":
-                    result = this.is_unique(value, arg[1], arg[2], other);
-                    break;
+                    case "is_unique":
+                        CastUtils.call(this, arg[0], value, arg[1], arg[2], other);
+                        break;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-
-            if (!result) break;
         }
     }
 }

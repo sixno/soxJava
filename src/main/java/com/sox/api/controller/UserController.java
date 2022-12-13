@@ -35,18 +35,18 @@ public class UserController {
     private Check check;
 
     @RequestMapping("/login")
-    public Map<String, Object> login() {
-        String user = api.json("user");
-        String pass = com.rsa_at_time(api.json("pass"), 30);
-        String reme = api.json("reme", "0");
+    public Api.Res login() {
+        String user = api.arg("user");
+        String pass = com.rsa_at_time(api.arg("pass"), 30);
+        String reme = api.arg("reme", "0");
 
         check.reset();
 
         check.validate("", "账号", "required", user);
         check.validate("", "密码", "required|min_length,6", pass);
 
-        if (check.result) {
-            Map<String, String> db_user = user_m.db.find("id,password,disabled", "name", user);
+        if (check.result.get()) {
+            Map<String, String> db_user = user_m.db.find("id,password,disabled", "code", user);
 
             if (db_user.size() == 0) return api.err("用户不存在");
             if (db_user.get("disabled").equals("1")) return api.err("账号被禁用");
@@ -57,21 +57,21 @@ public class UserController {
 
             return api.put(user_m.login(db_user.get("id"), reme));
         } else {
-            api.set("err", check.errors);
+            api.set("err", check.errors.get());
 
-            return api.err(check.error);
+            return api.err(check.error.get());
         }
     }
 
     @RequestMapping("/logout")
-    public Map<String, Object> logout() {
+    public Api.Res logout() {
         user_m.del_session();
 
         return api.msg("退出成功");
     }
 
     @RequestMapping("/current")
-    public Map<String, Object> current() {
+    public Api.Res current() {
         String user_id = user_m.get_session("id");
 
         Map<String, Object> item = user_m.item(user_id);
@@ -84,7 +84,7 @@ public class UserController {
     }
 
     @RequestMapping("/get_auth")
-    public Map<String, Object> get_auth() {
+    public Api.Res get_auth() {
         Map<String, String> data = user_m.get_auth(user_m.get_session("id"));
 
         data.put("0", "1");
@@ -94,8 +94,8 @@ public class UserController {
 
     @CheckAuth(index = "3", value = "2")
     @RequestMapping("/add")
-    public Map<String, Object> add() {
-        Map<String, String> data = api.json(input -> {
+    public Api.Res add() {
+        Map<String, String> data = api.arg(input -> {
             if (input.get("key").equals("password")) {
                 input.put("val", com.rsa_decrypt(input.get("val")));
             }
@@ -103,11 +103,11 @@ public class UserController {
 
         check.reset(data);
 
-        check.validate("name", "账号", "required|is_unique,sys_user,name");
-        check.validate("cname", "姓名", "required");
+        check.validate("code", "账号", "required|is_unique,sys_user,name");
+        check.validate("name", "姓名", "required");
         check.validate("password", "密码", "required|min_length,6");
 
-        if (check.result) {
+        if (check.result.get()) {
             data.put("creator", user_m.get_session("id"));
 
             long user_id = user_m.add(data);
@@ -118,28 +118,28 @@ public class UserController {
                 return api.err("用户创建失败");
             }
         } else {
-            api.set("err", check.errors);
+            api.set_err(check.errors.get());
 
-            return api.err(check.error);
+            return api.err(check.error.get());
         }
     }
 
     @RequestMapping("/mod")
-    public Map<String, Object> mod() {
-        String user_id = api.json("user_id", user_m.get_session("id"));
+    public Api.Res mod() {
+        String user_id = api.arg("user_id", user_m.get_session("id"));
 
         if (!user_id.equals(user_m.get_session("id")) && !com.check_auth("3", "2")) return api.err("您没有权限");
 
-        Map<String, String> data = api.json(input -> {
+        Map<String, String> data = api.arg(input -> {
             if (input.get("key").equals("user_id")) input.put("key", "");
         });
 
         check.reset(data);
 
-        check.validate("name", "账号", "required|is_unique,sys_user,name#" + user_id, "@@NULL");
-        check.validate("cname", "姓名", "required", "@@NULL");
+        check.validate("code", "账号", "required|is_unique,sys_user,code#" + user_id, "@@NULL");
+        check.validate("name", "姓名", "required", "@@NULL");
 
-        if (check.result) {
+        if (check.result.get()) {
             if (user_m.mod(user_id, data) > 0) {
                 if (user_id.equals(user_m.get_session("id"))) api.set("code", "0001");
 
@@ -148,22 +148,22 @@ public class UserController {
                 return api.err("没有信息被修改");
             }
         } else {
-            api.set("err", check.errors);
+            api.set("err", check.errors.get());
 
-            return api.err(check.error);
+            return api.err(check.error.get());
         }
     }
 
     @RequestMapping("/set_password")
-    public Map<String, Object> set_password() {
-        String user_id = api.json("user_id");
+    public Api.Res set_password() {
+        String user_id = api.arg("user_id");
 
-        String newpword = com.rsa_decrypt(api.json("newpword"));
+        String newpword = com.rsa_decrypt(api.arg("newpword"));
 
         if(user_id.equals("")) {
             user_id = user_m.get_session("id");
 
-            String oldpword = com.rsa_at_time(api.json("oldpword"), 30);
+            String oldpword = com.rsa_at_time(api.arg("oldpword"), 30);
             String password = user_m.db.field("password", user_id);
 
             if(!password.equals(com.salt_hash(oldpword, password))) return api.err("密码错误");
@@ -184,15 +184,15 @@ public class UserController {
     }
 
     @RequestMapping("/list")
-    public Map<String, Object> list() {
-        Map<String, Object> map = com.map(api.json(), "role_id");
+    public Api.Res list() {
+        Map<String, Object> map = com.map(api.arg(), "role_id");
 
-        if (!api.json("__search").equals("")) {
-            map.put("like#name,cname", api.json("__search"));
+        if (!api.arg("__search").equals("")) {
+            map.put("like#code,name", api.arg("__search"));
         }
 
-        if (!api.json("role_id").equals("")) {
-            List<Map<String, String>> user_role_list = user_m.db.table("sys_user_role").read("*", "in#role_id", api.json("role_id").replace("|", ","));
+        if (!api.arg("role_id").equals("")) {
+            List<Map<String, String>> user_role_list = user_m.db.table("sys_user_role").read("*", "in#role_id", api.arg("role_id").replace("|", ","));
 
             if (user_role_list.size() > 0) {
                 map.put("in#id", com.join(user_role_list, "user_id", ","));
@@ -201,16 +201,16 @@ public class UserController {
             }
         }
 
-        Map<String, Long> line = api.line(20);
+        Api.Line line = api.line(20);
 
-        if (line.get("rows") == 0) line.put("rows", user_m.list_count(map));
-        if (line.get("page") == 0) line.put("page", (long)Math.ceil((double)line.get("rows") / (double)line.get("size")));
-
-        map.put("#limit", line.get("size") + "," + ((line.get("page") - 1) * line.get("size")));
-
-        List<Map<String, Object>> list = user_m.list(map);
+        if (line.rows == 0) line.rows = user_m.list_count(map);
+        if (line.page == 0) line.page = api.page(line);
 
         api.set_line(line);
+
+        map.put("#limit", line);
+
+        List<Map<String, Object>> list = user_m.list(map);
 
         if (list.size() > 0) {
             return api.put(list);
@@ -220,15 +220,15 @@ public class UserController {
     }
 
     @RequestMapping("/item")
-    public Map<String, Object> item() {
-        String user_id = api.json("user_id");
+    public Api.Res item() {
+        String user_id = api.arg("user_id");
 
         return api.put(user_m.item(user_id));
     }
 
     @RequestMapping("/role")
-    public Map<String, Object> role() {
-        String user_id = api.json("user_id");
+    public Api.Res role() {
+        String user_id = api.arg("user_id");
 
         List<Map<String, String>> role = user_m.db.table("sys_user_role").read("role_id", "user_id", user_id);
 

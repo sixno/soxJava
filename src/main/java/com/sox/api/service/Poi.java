@@ -1,10 +1,7 @@
 package com.sox.api.service;
 
-import com.sox.api.utils.CallbackUtils_2;
-import org.apache.poi.hssf.usermodel.HSSFSheet;
-import org.apache.poi.hssf.usermodel.HSSFWorkbook;
-import org.apache.poi.hwpf.HWPFDocument;
-import org.apache.poi.hwpf.usermodel.Range;
+import com.sox.api.utils.CallbackUtils;
+import com.sox.api.utils.CastUtils;
 import org.apache.poi.ooxml.POIXMLDocument;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -12,13 +9,13 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xwpf.usermodel.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,10 +23,29 @@ import java.util.Map;
 
 @Service
 public class Poi {
-    public String cell_value(Cell cell) {
-        if (cell == null) return "";
+    @Autowired
+    public Check check;
 
-        String value = "";
+    public static class XSSFLine {
+        public int row_no;
+        public int max_no;
+        public Map<Integer, String> data;
+        public XSSFWorkbook workbook;
+
+        public XSSFLine(Object... obj) {
+            if (obj.length > 0) this.row_no = CastUtils.cast(obj[0]);
+            if (obj.length > 1) this.max_no = CastUtils.cast(obj[1]);
+            if (obj.length > 2) this.data = CastUtils.cast(obj[2]);
+            if (obj.length > 3) this.workbook = CastUtils.cast(obj[3]);
+        }
+    }
+
+    public String cell_value(Cell cell, String... def) {
+        String def_0 = def.length > 0 ? def[0] : "";
+
+        if (cell == null) return def_0;
+
+        String value = def_0;
 
         CellType cell_type = cell.getCellType();
 
@@ -58,148 +74,125 @@ public class Poi {
         return value;
     }
 
-    public String cell_value(String file_path, int sheet_id, int row_id, int col_id, String... def) {
-        String def_value = def.length > 0 ? def[0] : "";
-
-        if (!file_path.endsWith(".xls") && !file_path.endsWith(".xlsx")) return def_value;
-
-        try {
-            Row row;
-
-            InputStream inputStream = new FileInputStream(file_path);
-
-            if (file_path.endsWith(".xls")) {
-                HSSFWorkbook workbook = new HSSFWorkbook(inputStream);
-
-                HSSFSheet sheet = workbook.getSheetAt(sheet_id);
-
-                row = sheet.getRow(row_id);
-            } else {
-                XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
-
-                XSSFSheet sheet = workbook.getSheetAt(sheet_id);
-
-                row = sheet.getRow(row_id);
-            }
-
-            String cell_value = this.cell_value(row.getCell(col_id));
-
-            inputStream.close();
-
-            return cell_value;
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        return def_value;
+    public String cell_value(XSSFSheet sheet, int row_id, int col_id, String... def) {
+        return this.cell_value(sheet.getRow(row_id).getCell(col_id), def);
     }
 
-    public int ord(String str) {
-        return str.length() > 0 ? (str.getBytes(StandardCharsets.UTF_8)[0] & 0xff) : 0; //& 0xff 针对utf-8编码
+    public String cell_value(XSSFWorkbook workbook, int sheet_id, int row_id, int col_id, String... def) {
+        return this.cell_value(workbook.getSheetAt(sheet_id), row_id, col_id, def);
     }
 
     public int col_int(String col) {
-        int num = 0;
+        col = col.toUpperCase();
+
         int len = col.length();
 
-        double bit = Math.pow(26, len - 1);
+        int num = 0;
 
-        int pos = 0;
+        for (int i = 0;i < len;i++) {
+            int tmp = (int) col.charAt(len - i - 1) - (int) 'A' + 1;
 
-        String chr = col;
+            tmp *= Math.pow(26, i);
 
-        while(pos <= len - 1)
-        {
-            chr = chr.substring(pos, len);
-            num += bit * (this.ord(chr.toUpperCase()) - 64);
-            bit /= 26;
-
-            pos++;
+            num += tmp;
         }
 
         return num - 1;
     }
 
-    public String cell_value(String file_path, String sheet_name, String row_name, String col_name, String... def) {
-        int sheet_id = Integer.parseInt(sheet_name);
-
-        int row_id = Integer.parseInt(row_name) - 1;
-        int col_id = this.col_int(col_name);
-
-        return this.cell_value(file_path, sheet_id, row_id, col_id, def);
+    public int row_int(String row) {
+        return Integer.parseInt(row) - 1;
     }
 
-    public void read_xls(String file_path, int sheet_id, CallbackUtils_2<Map<Integer, String>, Integer> callback) {
-        if (!file_path.endsWith(".xls") && !file_path.endsWith(".xlsx")) return;
+    public String col_str(int col_int) {
+        String col = "";
+
+        do {
+            if (col.length() > 0) col_int--;
+
+            col = ((char) (col_int % 26 + (int) 'A')) + col;
+
+            col_int = (col_int - col_int % 26) / 26;
+        } while (col_int > 0);
+
+        return col;
+    }
+
+    public String row_str(int row_int) {
+        return (row_int + 1) + "";
+    }
+
+    public Map<String, Integer> grid(String str) {
+        Map<String, Integer> grid = new LinkedHashMap<String, Integer>(){{
+            put("col", 0);
+            put("row", 0);
+        }};
+
+        StringBuilder col = new StringBuilder();
+        StringBuilder row = new StringBuilder();
+
+        for (String s : str.split("")) {
+            if (check.numeric(s)) {
+                row.append(s);
+            } else {
+                col.append(s);
+            }
+        }
+
+        if (!col.toString().equals("")) {
+            grid.put("col", this.col_int(col.toString()));
+        }
+
+        if (!row.toString().equals("")) {
+            grid.put("row", this.row_int(row.toString()));
+        }
+
+        return grid;
+    }
+
+    public void open_xlsx(String file_path, CallbackUtils<XSSFWorkbook> callback) {
+        if (!file_path.endsWith(".xlsx")) return;
 
         try {
-            Map<Integer, String> line = new LinkedHashMap<>();
-
-            // 1、获取文件输入流
             InputStream inputStream = new FileInputStream(file_path);
 
-            if (file_path.endsWith(".xls")) {
-                // 2、获取Excel工作簿对象
-                HSSFWorkbook workbook = new HSSFWorkbook(inputStream);
+            XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
 
-                // 3、得到Excel工作表对象
-                HSSFSheet sheet = workbook.getSheetAt(sheet_id);
+            callback.deal(workbook);
 
-                line.put(0, sheet.getSheetName());
-
-                callback.deal(line, -1);
-
-                // 4、循环读取表格数据
-                for (Row row : sheet) {
-                    line = new LinkedHashMap<>();
-
-                    for (int i = 0;i < row.getLastCellNum();i++) {
-                        Cell cell = row.getCell(i);
-
-                        if (cell == null) continue;
-
-                        line.put(cell.getColumnIndex(), this.cell_value(cell));
-                    }
-
-                    callback.deal(line, row.getRowNum());
-                }
-
-                // 5、关闭流
-                workbook.close();
-            } else {
-                // 2、获取Excel工作簿对象
-                XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
-
-                // 3、得到Excel工作表对象
-                XSSFSheet sheet = workbook.getSheetAt(sheet_id);
-
-                line.put(0, sheet.getSheetName());
-
-                callback.deal(line, -1);
-
-                // 4、循环读取表格数据
-                for (Row row : sheet) {
-                    line = new LinkedHashMap<>();
-
-                    for (int i = 0;i < row.getLastCellNum();i++) {
-                        Cell cell = row.getCell(i);
-
-                        if (cell == null) continue;
-
-                        line.put(cell.getColumnIndex(), this.cell_value(cell));
-                    }
-
-                    callback.deal(line, row.getRowNum());
-                }
-
-                // 5、关闭流
-                workbook.close();
-            }
-
+            workbook.close();
             inputStream.close();
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public void read_xlsx(String file_path, int sheet_id, CallbackUtils<XSSFLine> callback) {
+        this.open_xlsx(file_path, (XSSFWorkbook workbook) -> {
+            Map<Integer, String> data = new LinkedHashMap<>();
+
+            XSSFSheet sheet = workbook.getSheetAt(sheet_id);
+
+            int max_no = sheet.getLastRowNum();
+
+            data.put(0, sheet.getSheetName());
+
+            callback.deal(new XSSFLine(-1, max_no, data, workbook));
+
+            for (Row row : sheet) {
+                data = new LinkedHashMap<>();
+
+                for (int i = 0;i < row.getLastCellNum();i++) {
+                    Cell cell = row.getCell(i);
+
+                    if (cell == null) continue;
+
+                    data.put(cell.getColumnIndex(), this.cell_value(cell));
+                }
+
+                callback.deal(new XSSFLine(row.getRowNum(), max_no, data, workbook));
+            }
+        });
     }
 
     public void make_paragraph(XWPFParagraph paragraph, Map<String, String> params) {
@@ -267,80 +260,51 @@ public class Poi {
         }
     }
 
-    public int generate_doc(String tpl_file, Map<String, String> params, String doc_file) {
-        if (!tpl_file.endsWith(".doc") && !tpl_file.endsWith(".docx")) return 0;
-        if (!doc_file.endsWith(".doc") && !doc_file.endsWith(".docx")) return 0;
+    public int generate_docx(String tpl_file, Map<String, String> params, String dst_file) {
+        if (!tpl_file.endsWith(".docx") || !dst_file.endsWith(".docx")) return 0;
 
-        if (tpl_file.endsWith(".doc") && doc_file.endsWith(".docx")) return 0;
-        if (tpl_file.endsWith(".docx") && doc_file.endsWith(".doc")) return 0;
+        try {
+            // 获取docx解析对象
+            XWPFDocument document = new XWPFDocument(POIXMLDocument.openPackage(tpl_file));
 
-        if (tpl_file.endsWith(".doc")) {
-            try {
-                // 读取模板
-                FileInputStream is = new FileInputStream(new File(tpl_file));
-                HWPFDocument document = new HWPFDocument(is);
-                // 读取文本内容
-                Range bodyRange = document.getRange();
-                // 替换内容
-                for (Map.Entry<String, String> param : params.entrySet()) {
-                    bodyRange.replaceText(param.getKey(), param.getValue());
-                }
+            // 当前循环方式效率较低
+            // 获取段落集合
+            List<XWPFParagraph> paragraphs = document.getParagraphs();
 
-                FileOutputStream fos = new FileOutputStream(new File(doc_file));
-
-                document.write(fos);
-
-                fos.close();
-
-                return 1;
-            } catch (Exception e) {
-                e.printStackTrace();
+            for (XWPFParagraph paragraph : paragraphs) {
+                this.make_paragraph(paragraph, params);
             }
-        } else {
-            try {
-                // 获取docx解析对象
-                XWPFDocument document = new XWPFDocument(POIXMLDocument.openPackage(tpl_file));
 
-                // 当前循环方式效率较低
+            // 获取表格对象集合
+            List<XWPFTable> tables = document.getTables();
 
-                // 获取段落集合
-                List<XWPFParagraph> paragraphs = document.getParagraphs();
+            for (XWPFTable table : tables) {
+                List<XWPFTableRow> rows = table.getRows();
 
-                for (XWPFParagraph paragraph : paragraphs) {
-                    this.make_paragraph(paragraph, params);
-                }
+                for (XWPFTableRow row : rows) {
+                    List<XWPFTableCell> cells = row.getTableCells();
 
-                // 获取表格对象集合
-                List<XWPFTable> tables = document.getTables();
+                    for (XWPFTableCell cell : cells) {
+                        if (cell.getText().contains("{%")) {
+                            List<XWPFParagraph> cell_paragraphs = cell.getParagraphs();
 
-                for (XWPFTable table : tables) {
-                    List<XWPFTableRow> rows = table.getRows();
-
-                    for (XWPFTableRow row : rows) {
-                        List<XWPFTableCell> cells = row.getTableCells();
-
-                        for (XWPFTableCell cell : cells) {
-                            if (cell.getText().contains("{%")) {
-                                List<XWPFParagraph> cell_paragraphs = cell.getParagraphs();
-
-                                for (XWPFParagraph paragraph : cell_paragraphs) {
-                                    this.make_paragraph(paragraph, params);
-                                }
+                            for (XWPFParagraph paragraph : cell_paragraphs) {
+                                this.make_paragraph(paragraph, params);
                             }
                         }
                     }
                 }
-
-                FileOutputStream fos = new FileOutputStream(new File(doc_file));
-
-                document.write(fos);
-
-                fos.close();
-
-                return 1;
-            } catch (Exception e) {
-                e.printStackTrace();
             }
+
+            FileOutputStream fos = new FileOutputStream(new File(dst_file));
+
+            document.write(fos);
+
+            fos.close();
+
+            return 1;
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
         return -1;

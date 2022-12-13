@@ -1,13 +1,14 @@
 package com.sox.api.service;
 
 import com.sox.api.utils.CallbackUtils;
-import com.sox.api.utils.ConnectionUtils;
+import com.sox.api.utils.CastUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.sql.*;
 import java.util.*;
+
 
 @Service
 public class Db implements Cloneable{
@@ -35,15 +36,43 @@ public class Db implements Cloneable{
     @Autowired
     private Log log;
 
-    public final Map<Integer, ConnectionUtils> pool = new LinkedHashMap<>();
-    public final Map<Integer, Boolean> pool_use = new LinkedHashMap<>();
+    public static class Conn {
+        public int p_id; // 连接池标识，若为-1表示用完即闭连接
+        public Long time;
+        public Connection conn;
 
-    private ConnectionUtils new_connection(int... id) {
-        ConnectionUtils connection = null;
+        public Conn(Connection connection, int... id) {
+            p_id = id.length > 0 ? id[0] : -1;
+            time = System.currentTimeMillis() / 1000L;
+            conn = connection;
+        }
+
+        public void setAutoCommit(boolean bool) throws SQLException {
+            conn.setAutoCommit(bool);
+        }
+
+        public void close() throws SQLException {
+            conn.close();
+        }
+
+        public Statement createStatement() throws SQLException {
+            return conn.createStatement();
+        }
+
+        public void commit() throws SQLException {
+            conn.commit();
+        }
+    }
+
+    public final Map<String, Conn> pool = new LinkedHashMap<>();
+    public final Map<String, Boolean> pool_use = new LinkedHashMap<>();
+
+    private Conn new_connection(int... id) {
+        Conn connection = null;
 
         try {
             Class.forName(db_driver);
-            connection = new ConnectionUtils(DriverManager.getConnection(db_location, db_username, db_password), id);
+            connection = new Conn(DriverManager.getConnection(db_location, db_username, db_password), id);
             connection.setAutoCommit(false);
         } catch (ClassNotFoundException | SQLException e) {
             e.printStackTrace();
@@ -52,43 +81,45 @@ public class Db implements Cloneable{
         return connection;
     }
 
-    public ConnectionUtils get_connection() {
+    public Conn get_connection() {
         // 以下是连接池状态信息，架构稳定后可删除或注释该段代码
-        int pool_size = 0; // 连接池中存活连接数
-        int pool_used = 0; // 当前连接使用数量
+        // int pool_size = 0; // 连接池中存活连接数
+        // int pool_used = 0; // 当前连接使用数量
 
-        for (int p_id : pool_use.keySet()) {
-            if (pool_use.get(p_id) != null) {
-                pool_size++;
+        // for (String p_id : pool_use.keySet()) {
+        //     if (pool_use.get(p_id) != null) {
+        //         pool_size++;
 
-                if (pool_use.get(p_id)) pool_used++;
-            }
-        }
+        //         if (pool_use.get(p_id)) pool_used++;
+        //     }
+        // }
 
-        log.msg("current pool size: " + pool_size, 2);
-        log.msg("current pool used: " + pool_used, 2);
+        // log.msg("current pool size: " + pool_size, 2);
+        // log.msg("current pool used: " + pool_used, 2);
         // 以上是连接池状态信息
 
         for (int i = 0;i < db_poolsize;i++) {
-            if (pool_use.get(i) != null && !pool_use.get(i)) {
-                // 在连接池中查找空闲连接
-                pool_use.put(i, true);
-            } else if (pool_use.get(i) == null) {
-                // 在连接池中创建新连接
-                pool_use.put(i, true);
+            String p_id = i + "";
 
-                pool.put(i, this.new_connection(i));
+            if (pool_use.get(p_id) != null && !pool_use.get(p_id)) {
+                // 在连接池中查找空闲连接
+                pool_use.put(p_id, true);
+            } else if (pool_use.get(p_id) == null) {
+                // 在连接池中创建新连接
+                pool_use.put(p_id, true);
+
+                pool.put(p_id, this.new_connection(i));
             } else {
                 continue;
             }
 
-            return pool.get(i);
+            return pool.get(p_id);
         }
 
         return this.new_connection();
     }
 
-    public void put_connection(ConnectionUtils connection) {
+    public void put_connection(Conn connection) {
         if (connection.p_id == -1) {
             try {
                 connection.close();
@@ -98,10 +129,12 @@ public class Db implements Cloneable{
 
             connection.conn = null;
         } else {
-            pool_use.put(connection.p_id, false);
+            String p_id = connection.p_id + "";
+
+            pool_use.put(p_id, false);
 
             if (com.time() - connection.time > 3600) {
-                pool_use.put(connection.p_id, null);
+                pool_use.put(p_id, null);
 
                 try {
                     connection.close();
@@ -163,21 +196,22 @@ public class Db implements Cloneable{
         return arg.length > 0 ? String.format(tpl, arg) : tpl;
     }
 
-    public void query(String sql, CallbackUtils<ResultSet> callback, ConnectionUtils... connections) {
+    public void query(String sql, CallbackUtils<ResultSet> callback, Conn... connections) {
         log.msg("sql: " + sql, 2);
 
         last_sql.set(sql);
         last_err.set("");
 
-        ConnectionUtils ln = connections.length == 0 ? this.get_connection() : connections[0];
+        Conn ln = connections.length == 0 ? this.get_connection() : connections[0];
 
         try (Statement sm = ln.createStatement(); ResultSet rs = sm.executeQuery(sql)) {
-
             ln.commit();
 
             callback.deal(rs);
         } catch (Exception e) {
             e.printStackTrace();
+
+            ln.time = com.time() - 36000; // 为了释放连接，如果不释放连接，会产生阻塞
 
             last_err.set(e.toString());
         }
@@ -185,7 +219,7 @@ public class Db implements Cloneable{
         if (connections.length == 0) this.put_connection(ln);
     }
 
-    public Long alter(String sql, ConnectionUtils... connections) {
+    public Long alter(String sql, Conn... connections) {
         log.msg("sql: " + sql, 2);
 
         last_sql.set(sql);
@@ -195,7 +229,7 @@ public class Db implements Cloneable{
         long result = 0;
         long log_id = 0;
 
-        ConnectionUtils ln = connections.length == 0 ? this.get_connection() : connections[0];
+        Conn ln = connections.length == 0 ? this.get_connection() : connections[0];
 
         try (Statement sm = ln.createStatement()) {
             result = sm.executeUpdate(sql);
@@ -240,8 +274,15 @@ public class Db implements Cloneable{
         long length = set.length > 0 ? set[0] : 0;
         long offset = set.length > 1 ? set[1] : 0;
 
+        // sql标准定义表集合是无序集合，因此，在某些版本MySQL中，子查询中临时表无序
+        // 但子查询中出现limit指令后，临时表又神奇的有序了
+        // 所以使用以下兼容查询方法
         if (offset + length > 0) {
-            sql = "SELECT * FROM (" + sql + ") `__T` LIMIT " + offset + "," + length;
+            if (sql.toLowerCase().contains(" limit ")) {
+                sql = "SELECT * FROM (" + sql + ") `__T` LIMIT " + offset + "," + length;
+            } else {
+                sql += " LIMIT " + offset + "," + length;
+            }
         }
 
         return sql;
@@ -318,7 +359,7 @@ public class Db implements Cloneable{
         return this.result(sql, set);
     }
 
-    public Long action(String sql, ConnectionUtils... connections) {
+    public Long action(String sql, Conn... connections) {
         this.restore_table();
 
         return this.alter(sql, connections);
@@ -341,6 +382,8 @@ public class Db implements Cloneable{
     }
 
     public String escape(String str){
+        if (str == null) return "";
+
         if (!str.equals("")) {
             String[] fbs = {val_esc, "'"};
 
@@ -362,7 +405,7 @@ public class Db implements Cloneable{
         boolean need_logic = false;
 
         for (String key : map.keySet()) {
-            String val = "";
+            String val;
             Object obj = map.get(key);
 
             val = obj == null ? "" : obj.toString();
@@ -385,8 +428,8 @@ public class Db implements Cloneable{
 
             int pos = key.indexOf("#");
 
-            String logic = "";
-            String lgc = "";
+            String logic;
+            String lgc;
 
             if (pos == -1) {
                 logic = "and";
@@ -442,22 +485,27 @@ public class Db implements Cloneable{
                     if (logic.contains("like")) {
                         key = key.replace(" = ", "");
 
-                        val = val.replace("\\", "\\\\").replace("%", "\\%");
+                        if (!key.startsWith(key_esc + "*"))
+                        {
+                            val = val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
 
-                        String like = (key.startsWith(key_esc + "%") ? "%" : "_") + (key.endsWith("%" + key_esc) ? "%" : "_");
+                            String like = (key.startsWith(key_esc + "%") ? "%" : "_") + (key.endsWith("%" + key_esc) ? "%" : "_");
 
-                        key = key.replace("%", "");
+                            key = key.replace("%", "");
 
-                        switch (like) {
-                            case "_%":
-                                val = val + '%';
-                                break;
-                            case "%_":
-                                val = "%" + val;
-                                break;
-                            default:
-                                val = "%" + val + "%";
-                                break;
+                            switch (like) {
+                                case "_%":
+                                    val = val + '%';
+                                    break;
+                                case "%_":
+                                    val = "%" + val;
+                                    break;
+                                default:
+                                    val = "%" + val + "%";
+                                    break;
+                            }
+                        } else {
+                            key = key.replace("*", "");
                         }
                     }
 
@@ -637,11 +685,18 @@ public class Db implements Cloneable{
     }
 
     public List<Map<String, String>> read(Map<String, Object> map) {
-        String sql = "";
+        String sql;
 
         String field = map.getOrDefault("#field","").toString();
         String unite = map.getOrDefault("#unite","").toString();
         String order = map.getOrDefault("#order","").toString();
+
+        if (map.get("#limit") != null && map.get("#limit") instanceof Api.Line) {
+            Api.Line line = CastUtils.cast(map.get("#limit"));
+
+            map.put("#limit", line.size + "," + ((line.page - 1) * line.size));
+        }
+
         String limit = map.getOrDefault("#limit","").toString();
 
         sql = this.sql("SELECT %s FROM %s ", this.fields(field), this.key_esc(this.table()));
@@ -793,7 +848,7 @@ public class Db implements Cloneable{
         return this.field(field, map, map.getOrDefault("#value", "").toString());
     }
 
-    public Long create(Map<String, String> data, ConnectionUtils... connections) {
+    public Long create(Map<String, String> data, Conn... connections) {
         insert_id.set("@@");
 
         String sql = this.sql("INSERT INTO %s ", this.key_esc(this.table()));
@@ -1063,7 +1118,7 @@ public class Db implements Cloneable{
 
         if (table.length == 0) this.restore_table();
 
-        String sql = this.sql("SELECT column_name,column_comment FROM information_schema.columns WHERE table_schema='%s' AND table_name='%s'", db_database, current_table);
+        String sql = this.sql("SELECT column_name,column_comment,column_default FROM information_schema.columns WHERE table_schema='%s' AND table_name='%s'", db_database, current_table);
 
         return this.result(sql);
     }
@@ -1096,6 +1151,34 @@ public class Db implements Cloneable{
         return list;
     }
 
+    public void add_partition(String table, String field, String title, String value) {
+        String p_check_sql = this.sql("SELECT * FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s' ORDER BY PARTITION_DESCRIPTION DESC", db_database, table);
+
+        List<Map<String, String>> p_list = this.result(p_check_sql);
+
+        // 检测分区是否存在
+        if (p_list.size() > 0) {
+            for (Map<String, String> p_item : p_list) {
+                if (p_item.get("partition_name").equals(title)) return;
+            }
+
+            String p_add_sql = this.sql("ALTER TABLE `%s` add PARTITION (PARTITION `%s` VALUES IN ('%s') ENGINE = InnoDB)", table, title, value);
+
+            this.alter(p_add_sql);
+        } else {
+            // 设置并创建分区
+            String p_set_sql = this.sql("ALTER TABLE `%s` PARTITION BY LIST COLUMNS(`" + field + "`) (PARTITION `%s` VALUES IN ('%s') ENGINE = InnoDB)", table, title, value);
+
+            this.alter(p_set_sql);
+        }
+    }
+
+    public void del_partition(String table, String title) {
+        String p_del_sql = this.sql("ALTER TABLE `%s` DROP PARTITION `%s`", table, title);
+
+        this.alter(p_del_sql);
+    }
+
     @Override
     public Db clone() {
         Db db = null;
@@ -1104,6 +1187,8 @@ public class Db implements Cloneable{
             db = (Db) super.clone();
         }catch(CloneNotSupportedException e) {
             e.printStackTrace();
+
+            db = new Db();
         }
 
         return db;

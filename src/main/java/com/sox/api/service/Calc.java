@@ -125,7 +125,15 @@ public class Calc {
 
         String result =  !Double.isNaN(result_d) && !Double.isInfinite(result_d) ? BigDecimal.valueOf(result_d).toString() : "";
 
-        return len.length > 0 ? this.round(result, len[0]) : result;
+
+
+        String res = len.length > 0 ? this.round(result, len[0]) : result;
+
+        log.msg("exp: " + exp, 3);
+        log.msg("arg: " + arg.toString(), 3);
+        log.msg("res: " + res, 3);
+
+        return res;
     }
 
     public String exp(String exp, Object... arg) {
@@ -140,9 +148,6 @@ public class Calc {
         for (int i = arg.length % 2;i < arg.length;i += 2) {
             map.put(arg[i].toString(), arg[i + 1]);
         }
-
-        log.msg("exp: " + exp, 3);
-        log.msg("arg: " + map.toString(), 3);
 
         return this.jep(exp, map, len);
     }

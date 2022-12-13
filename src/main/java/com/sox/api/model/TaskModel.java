@@ -110,20 +110,26 @@ public class TaskModel {
                 item.put("next_scheduled_time", "0");
 
                 if (!data.get(key).equals("")) {
-                    try {
-                        CronExpression cronExpression = new CronExpression(data.get(key));
-
-                        Date date = cronExpression.getNextValidTimeAfter(new Date());
-
-                        item.put("next_scheduled_time", (date.getTime() / 1000L) + "");
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
+                    item.put("next_scheduled_time", this.next_scheduled_time(data.get(key)));
                 }
             }
         }
 
         return item;
+    }
+
+    public String next_scheduled_time(String cron_exp) {
+        try {
+            CronExpression cronExpression = new CronExpression(cron_exp);
+
+            Date date = cronExpression.getNextValidTimeAfter(new Date());
+
+            return (date.getTime() / 1000L) + "";
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return "";
     }
 
     public List<Map<String, Object>> list(Map<String, Object> map, int... count) {
@@ -198,7 +204,7 @@ public class TaskModel {
         if (data.get("type").equals("0")) {
             qm.add_job("__" + manual + "::" + data.get("name"), "system::" + data.get("group"), data.get("path"), "", "__id", data.get("id"), "__user_id", data.get("user_id"), data.get("arg"));
         } else {
-            qm.add_job("__" + manual + "::" + data.get("name"), "system::" + data.get("group"), data.get("path"), "", "__id", data.get("id"), "__user_id", data.get("user_id"), "__file", data.get("path"), data.get("arg"));
+            qm.add_job("__" + manual + "::" + data.get("name"), "system::" + data.get("group"), "com.sox.api.quartz.task.KettleJob", "", "__id", data.get("id"), "__user_id", data.get("user_id"), "__file", data.get("path"), data.get("arg"));
         }
     }
 

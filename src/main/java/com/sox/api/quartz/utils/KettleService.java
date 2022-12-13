@@ -3,8 +3,6 @@ package com.sox.api.quartz.utils;
 import com.sox.api.service.Com;
 import com.sox.api.utils.CallbackUtils;
 import org.pentaho.di.core.KettleEnvironment;
-import org.pentaho.di.core.Result;
-import org.pentaho.di.core.RowMetaAndData;
 import org.pentaho.di.core.plugins.PluginFolder;
 import org.pentaho.di.core.plugins.StepPluginType;
 import org.pentaho.di.job.Job;

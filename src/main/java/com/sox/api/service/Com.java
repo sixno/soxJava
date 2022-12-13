@@ -1,6 +1,7 @@
 package com.sox.api.service;
 
 import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.parser.Feature;
 import com.sox.api.model.CodeModel;
 import com.sox.api.model.UserModel;
 import org.apache.tomcat.util.buf.StringUtils;
@@ -9,11 +10,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.crypto.Cipher;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -46,10 +46,10 @@ public class Com {
     public String super_user;
 
     @Autowired
-    public Api api;
+    public Log log;
 
     @Autowired
-    public UserModel user_m;
+    public Api api;
 
     @Autowired
     public Db db;
@@ -58,70 +58,64 @@ public class Com {
     public Check check;
 
     @Autowired
+    public Disk disk;
+
+    @Autowired
     public CodeModel code_m;
 
-    public final ThreadLocal<Map<String, String>> http_get = new ThreadLocal<>();
-    public String http_get(String key, String... conf) {
-        String def = conf.length > 0 ? conf[0] : "";
+    @Autowired
+    public UserModel user_m;
 
-        if (http_get.get() == null) {
-            http_get.set(new LinkedHashMap<>());
+    public final ThreadLocal<HttpServletRequest> http_request = new ThreadLocal<>();
+    public final ThreadLocal<HttpServletResponse> http_response = new ThreadLocal<>();
 
-            if (RequestContextHolder.getRequestAttributes() != null) {
-                HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+    public final ThreadLocal<String> http_g_str = ThreadLocal.withInitial(() -> "");
+    public final ThreadLocal<Map<String, String>> http_arg_g = new ThreadLocal<>();
+    public Map<String, String> http_get() {
+        if (http_arg_g.get() == null) {
+            http_arg_g.set(new LinkedHashMap<>());
 
-                String queryString = request.getQueryString();
+            if (!http_g_str.get().equals("")) {
+                try {
+                    String[] qs = http_g_str.get().split("&");
 
-                if (queryString != null) {
-                    try {
-                        queryString = URLDecoder.decode(queryString, "UTF-8");
+                    for (String q : qs) {
+                        q = URLDecoder.decode(q, "UTF-8");
 
-                        String[] qs = queryString.split("&");
+                        int pos = q.indexOf("=");
 
-                        for (String q : qs) {
-                            int pos = q.indexOf("=");
-
-                            http_get.get().put(q.substring(0, pos), q.substring(pos + 1));
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
+                        if(pos > 0) http_arg_g.get().put(q.substring(0, pos), q.substring(pos + 1));
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             }
         }
 
-        return http_get.get().get(key) != null ? http_get.get().get(key) : def;
+        return http_arg_g.get();
+    }
+    public String http_get(String key, String... def) {
+        String def_0 = def.length > 0 ? def[0] : "";
+
+        return this.http_get().get(key) != null ? this.http_get().get(key) : def_0;
     }
 
-    public final ThreadLocal<Map<String, String>> http_post = new ThreadLocal<>();
-    public String http_post(String key, String... conf) {
-        String def = conf.length > 0 ? conf[0] : "";
+    public final ThreadLocal<String> http_p_str = ThreadLocal.withInitial(() -> "");
+    public final ThreadLocal<Map<String, String>> http_arg_p = new ThreadLocal<>();
+    public Map<String, String> http_post() {
+        if (http_arg_p.get() == null) {
+            http_arg_p.set(new LinkedHashMap<>());
 
-        if (http_post.get() == null) {
-            http_post.set(new LinkedHashMap<>());
-
-            if (RequestContextHolder.getRequestAttributes() != null) {
-                HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
-
-                StringBuilder postString = new StringBuilder();
-
+            if (!http_p_str.get().equals("")) {
                 try {
-                    BufferedReader bufferReader = new BufferedReader(request.getReader());
-
-                    String line;
-
-                    while ((line = bufferReader.readLine()) != null) {
-                        postString.append(line);
-                    }
-
-                    String queryString = URLDecoder.decode(postString.toString(), "UTF-8");
-
-                    String[] qs = queryString.split("&");
+                    String[] qs = http_p_str.get().split("&");
 
                     for (String q : qs) {
+                        q = URLDecoder.decode(q, "UTF-8");
+
                         int pos = q.indexOf("=");
 
-                        http_post.get().put(q.substring(0, pos), q.substring(pos + 1));
+                        if (pos > 0) http_arg_p.get().put(q.substring(0, pos), q.substring(pos + 1));
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -129,16 +123,42 @@ public class Com {
             }
         }
 
-        return http_post.get().get(key) != null ? http_get.get().get(key) : def;
+        return http_arg_p.get();
+    }
+    public String http_post(String key, String... def) {
+        String def_0 = def.length > 0 ? def[0] : "";
+
+        return this.http_post().get(key) != null ? this.http_post().get(key) : def_0;
     }
 
-    private final Curl.Resolver<Map<String, Object>> jsonResolver = (httpCode, responseBody) -> {
-        String json_str = new String(responseBody, StandardCharsets.UTF_8);
+    public final ThreadLocal<String> http_j_str = ThreadLocal.withInitial(() -> "");
+    public final ThreadLocal<Map<String, String>> http_arg_j = new ThreadLocal<>();
+    public Map<String, String> http_json() {
+        if (http_arg_j.get() == null) {
+            http_arg_j.set(new LinkedHashMap<>());
 
-        System.out.println(json_str);
+            if (!http_j_str.get().equals("")) {
+                try {
+                    JSONObject json_obj = JSONObject.parseObject(http_j_str.get(), Feature.OrderedField);
 
-        return JSONObject.parseObject(json_str);
-    };
+                    if (json_obj.size() > 0) {
+                        for (String json_key : json_obj.keySet()) {
+                            http_arg_j.get().put(json_key, json_obj.get(json_key).toString());
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        return http_arg_j.get();
+    }
+    public String http_json(String key, String... def) {
+        String def_0 = def.length > 0 ? def[0] : "";
+
+        return this.http_json().get(key) != null ? this.http_json().get(key) : def_0;
+    }
 
     public String net_addr = null;
     public String net_addr() {
@@ -316,10 +336,10 @@ public class Com {
         StringBuilder sb = new StringBuilder();
 
         for (String item : list) {
-            sb.append(item).append(separator);
+            if(!item.equals("")) sb.append(item).append(separator);
         }
 
-        return sb.toString().substring(0, sb.toString().length() - separator.length());
+        return sb.toString().equals("") ? "" : sb.toString().substring(0, sb.toString().length() - separator.length());
     }
 
     public String join(List<Map<String, String>> list, String field, String separator) {
@@ -400,11 +420,35 @@ public class Com {
     public Map<String, Object> str_obj_map(Map<String, String> map) {
         Map<String, Object> str_obj = new LinkedHashMap<>();
 
+        if (map == null) return str_obj;
+
         for (String key : map.keySet()) {
             str_obj.put(key, map.get(key));
         }
 
         return str_obj;
+    }
+
+    public Map<String, String> str_str_map(Map<String, Object> map) {
+        Map<String, String> str_str = new LinkedHashMap<>();
+
+        if (map == null) return str_str;
+
+        for (String key : map.keySet()) {
+            str_str.put(key, map.get(key).toString());
+        }
+
+        return str_str;
+    }
+
+    public Map<String, String> dict_map(List<Map<String, String>> list, String key, String val) {
+        Map<String, String> dict = new LinkedHashMap<>();
+
+        for (Map<String, String> item : list) {
+            dict.put(item.get(key), item.get(val));
+        }
+
+        return dict;
     }
 
     public String map_md5(Object map, Object... ext) {
@@ -417,7 +461,7 @@ public class Com {
         return this.md5(str);
     }
 
-    public Map<String, Object> map(Map<String, Object> input, String... except) {
+    public Map<String, Object> map(Map<String, String> input, String... except) {
         Map<String, Object> map = new LinkedHashMap<>();
 
         if (input == null) return map;
@@ -450,10 +494,34 @@ public class Com {
                 if (field.equals("")) continue;
 
                 map.put("like#%" + field, input.get(key));
+            } else if(key.endsWith("__gt")) {
+                String field = key.substring(0, key.length() - 4);
+
+                if (field.equals("")) continue;
+
+                map.put(field + " >=", input.get(key));
+            } else if(key.endsWith("__ge")) {
+                String field = key.substring(0, key.length() - 4);
+
+                if (field.equals("")) continue;
+
+                map.put(field + " >=", input.get(key));
+            } else if(key.endsWith("__lt")) {
+                String field = key.substring(0, key.length() - 4);
+
+                if (field.equals("")) continue;
+
+                map.put(field + " <", input.get(key));
+            } else if(key.endsWith("__le")) {
+                String field = key.substring(0, key.length() - 4);
+
+                if (field.equals("")) continue;
+
+                map.put(field + " <=", input.get(key));
             } else {
-                if (!input.get(key).toString().contains(",")) {
-                    if (input.get(key).toString().contains("|")) {
-                        map.put("in#" + key, input.get(key).toString().split("\\|"));
+                if (!input.get(key).contains(",")) {
+                    if (input.get(key).contains("|")) {
+                        map.put("in#" + key, input.get(key).split("\\|"));
                     } else {
                         map.put(key, input.get(key));
                     }
@@ -461,8 +529,8 @@ public class Com {
                     String cluster = "";
                     int insert = 0;
 
-                    if (input.get(key).toString().contains("|")) {
-                        String[] sections = input.get(key).toString().split("\\|");
+                    if (input.get(key).contains("|")) {
+                        String[] sections = input.get(key).split("\\|");
 
                         map.put("^" + insert + "-" + key, "and (");
 
@@ -502,7 +570,7 @@ public class Com {
 
                         map.put("^" + insert + "-" + key, ")");
                     } else {
-                        String[] condition = input.get(key).toString().split(",");
+                        String[] condition = input.get(key).split(",");
 
                         if (condition[0] != null && !condition[0].endsWith("-")) {
                             cluster += "#";
@@ -586,17 +654,19 @@ public class Com {
     }
 
     public String base_url(String... uri) {
-        if (RequestContextHolder.getRequestAttributes() == null) return "";
+        String base_url = "";
 
-        HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+        HttpServletRequest request = http_request.get();
 
-        String base_url = (request.getHeader("X-Forwarded-Scheme") == null ? request.getScheme() : request.getHeader("X-Forwarded-Scheme")) + "://" + request.getServerName() + (request.getServerPort() != 80 && request.getServerPort() != 443 ? ":" + request.getServerPort() : "");
+        if (request != null) {
+            base_url = (request.getHeader("X-Forwarded-Scheme") == null ? request.getScheme() : request.getHeader("X-Forwarded-Scheme")) + "://" + request.getServerName() + (request.getServerPort() != 80 && request.getServerPort() != 443 ? ":" + request.getServerPort() : "");
+        }
 
         return base_url + (uri.length > 0 ? uri[0] : "");
     }
 
     public String resource(String path, String... delimiters) {
-        BufferedReader reader = null;
+        BufferedReader reader;
         String content = "";
 
         String delimiter = delimiters.length > 0 ? delimiters[0] : "\n";
@@ -617,7 +687,9 @@ public class Com {
     }
 
     public String remote_ip() {
-        HttpServletRequest request = ((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getRequest();
+        HttpServletRequest request = http_request.get();
+
+        if (request == null) return "";
 
         String ip = request.getHeader("x-forwarded-for");
 
@@ -640,16 +712,18 @@ public class Com {
         return ip;
     }
 
-    public boolean is_numeric(String str) {
-        Pattern pattern = Pattern.compile("[0-9]*");
+    public String num_rand(int min, int max, int... ext) {
+        int ext_0 = ext.length > 0 ? ext[0] : 1; // 乘数
+        int ext_1 = ext.length > 1 ? ext[1] : 1; // 除数
+        int ext_2 = ext.length > 2 ? ext[2] : 0; // 是否有符号随机
 
-        Matcher isNum = pattern.matcher(str);
+        Random random = new Random();
 
-        if (!isNum.matches()) {
-            return false;
-        }
+        int num = random.nextInt(max - min + 1) + min;
 
-        return true;
+        String result = (ext_2 == 1 && Math.random() < 0.5 ? "-" : "") + ((double) num * (double) ext_0 / (double) ext_1);
+
+        return result.endsWith(".0") ? result.substring(0, result.length() - 2) : result;
     }
 
     public String hash(String source, String hashType) {
@@ -966,31 +1040,83 @@ public class Com {
         return year + "-" + (month < 10 ? "0" : "") + month + "-" + (at_day < 10 ? "0" : "") + at_day;
     }
 
-    public String last_month(String... months) {
-        String month = months.length > 0 ? months[0] : this.date("yyyy-MM");
+    public String last_month(Object... months) {
+        String month = months.length > 0 ? months[0].toString() : this.date("yyyy-MM");
 
         String[] arr = month.split("-");
 
         if (arr.length < 2) return "";
 
-        if (Integer.parseInt(arr[1]) == 1) {
-            arr[1] = "12";
+        int y = Integer.parseInt(arr[0]);
+        int m = Integer.parseInt(arr[1]);
 
-            arr[0] = (Integer.parseInt(arr[0]) - 1) + "";
-        } else {
-            arr[1] = String.format("%02d", Integer.parseInt(arr[1]) - 1);
+        int new_y = y;
+
+        int new_m = m - (months.length > 1 ? Integer.parseInt(months[1].toString()) : 1);
+
+        if (new_m < 1) {
+            new_y = y + (int) Math.floor((double) new_m / 12.0) - 1;
+
+            new_m = 12 + (new_m % 12);
         }
 
-        return arr[0] + "-" + arr[1];
+        if (new_m > 12) {
+            new_y = y + (int) Math.floor((double) new_m / 12.0);
+
+            new_m = new_m % 12;
+        }
+
+        return new_y + "-" + String.format("%02d", new_m);
+    }
+
+    // 记录用户上传文件
+    public void add_upload_record(int tag, String url, String file_name, String file_path, String user_id) {
+        String file_id = db.table("file_upload").field("id", "path", file_path);
+
+        if (file_id.equals("")) {
+            Map<String, String> data = new LinkedHashMap<>();
+
+            data.put("tag", tag + "");
+            data.put("url", url);
+            data.put("name", file_name);
+            data.put("path", file_path);
+            data.put("creator", user_id);
+            data.put("create_time", this.time().toString());
+
+            db.table("file_upload").create(data);
+        }
+    }
+
+    // 删除用户上传文件
+    public void del_upload_record(String file_id) {
+        Map<String, String> data = db.table("file_upload").find("*", file_id);
+
+        if (data.size() == 0) return;
+
+        disk.del_file(this.path(data.get("path")));
+
+        db.table("file_upload").delete(file_id);
+    }
+
+    public void del_upload_file(String path, int... is_abs) {
+        int is_abs_0 = is_abs.length > 0 ? is_abs[0] : 0;
+
+        disk.del_file(is_abs_0 == 0 ? this.path(path) : path);
+
+        String file_id = db.table("file_upload").field("id", "path", path);
+
+        if (!file_id.equals("")) {
+            db.table("file_upload").delete(file_id);
+        }
     }
 
     // 分布式部署请求分发
     // 若指定host（主机号，即配置文件中host_id）则只转发当前请求到指定主机，不分发
     // 分发模式下，将请求转发给不包含自身在内的集群内所有主机，返回true
     // 转发模式下，若指定主机为自身，则不转发，返回false，否则返回true
-    public Map<String, Object> request_hand_out(Object... host) {
-        if (host_id.equals("0")) return api.err("非分布式部署，请求不需要转发或分发"); // 非分布式部署不需要分发或转发请求
-        if (this.http_get("no_hand").equals("1")) return api.err("请求包含禁止转发或分发标记");
+    public Api.Res request_hand_out(Object... host) {
+        if (host_id.equals("0")) return new Api.Res("out", "0", "msg", "非分布式部署，请求不需要转发或分发");
+        if (this.http_get("no_hand").equals("1")) return new Api.Res("out", "0", "msg", "请求包含禁止转发或分发标记");
 
         String target_host = "0";
 
@@ -1016,14 +1142,14 @@ public class Com {
         List<Map<String, String>> host_list;
 
         if (!target_host.equals("0")) {
-            if (host_id.equals(target_host)) return api.err("目标主机为本机，不需要转发或分发请求");
+            if (host_id.equals(target_host)) return new Api.Res("out", "0", "msg", "目标主机为本机，不需要转发或分发请求");
 
             host_list = db.table("sys_host").read("host_id,ip,port", "host_id", target_host);
         } else {
             host_list = db.table("sys_host").read("host_id,ip,port", "host_id!=", host_id);
         }
 
-        HttpServletRequest request = ((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getRequest();
+        HttpServletRequest request = http_request.get();
 
         String token = request.getHeader("token");
 
@@ -1046,43 +1172,103 @@ public class Com {
             uri = request.getRequestURI();
             get = (queryString == null ? "" : queryString);
 
-            if (api.json().size() > 0) {
-                arg = JSONObject.toJSONString(api.json());
+            if (api.arg().size() > 0) {
+                arg = JSONObject.toJSONString(api.arg());
             }
         }
 
-        Map<String, Object> json = new LinkedHashMap<>();
-
-        int total = 0;
-        int count = 0;
+        int failed_count = 0;
 
         List<Map<String, String>> failed_host_list = new ArrayList<>();
 
         for (Map<String, String> host_item : host_list) {
-            Curl curl = new Curl("http://" + host_item.get("ip") + ":" + host_item.get("port") + uri + "?no_hand=1" + (get.equals("") ? "" : "&" + get))
-                    .headers(header);
+            Curl curl = new Curl("http://" + host_item.get("ip") + ":" + host_item.get("port") + uri + "?no_hand=1" + (get.equals("") ? "" : "&" + get));
+
+            curl.headers(header);
 
             if (!arg.equals("")) {
                 curl.opt("-d", arg);
             }
 
-            json = curl.exec(jsonResolver,null);
+            Map<String, Object> json = curl.exec((httpCode, responseBody) -> {
+                String json_str = new String(responseBody, StandardCharsets.UTF_8);
 
-            total++;
+                return JSONObject.parseObject(json_str);
+            }, null);
 
             if (!json.getOrDefault("out", "0").toString().equals("1")) {
-                count++;
+                failed_count++;
 
-                Map<String, Object> finalJson = json;
                 Map<String, String> failed_host = new LinkedHashMap<String, String>(){{
                     put("host_id", host_item.get("host_id"));
-                    put("host_err", finalJson.get("msg").toString());
+                    put("host_err", json.get("msg").toString());
                 }};
 
                 failed_host_list.add(failed_host);
             }
         }
 
-        return total == 1 ? json : (count == 0 ? json : api.err("请求分发后，有" + count + "台主机返回执行错误", failed_host_list));
+        return new Api.Res("out", failed_count == 0 ? "1" : "1",
+                "msg", failed_count == 0 ? "" : "请求分发后，有" + failed_count + "台主机返回执行错误",
+                "data", failed_count == 0 ? "" : failed_host_list);
+    }
+
+    public String num_hans(String str) {
+        str = str.replace(",", "").replace(" ", "").trim();
+
+        if (!check.numeric(str)) return str.toUpperCase();
+
+        boolean isPositive = true;
+
+        //判断是不是负数
+        if(str.charAt(0)=='-') isPositive = false;
+
+        StringBuilder sb = new StringBuilder();
+
+        if(!isPositive) sb.append("负");
+
+        //整数部分和小数部分（如果有）隔开
+        String[] input = str.split("\\.");
+
+        String IntegerPart = isPositive ? input[0] : input[0].substring(1);
+
+        String[] s1 = {"零", "一", "二", "三", "四", "五", "六", "七", "八", "九"};
+        String[] s2 = {"十", "百", "千", "万", "十", "百", "千", "亿", "十", "百", "千", "兆", "十", "百", "千"};
+
+        int n = IntegerPart.length();
+
+        for (int i = 0; i < n;i++) {
+            int num = IntegerPart.charAt(i) - '0';
+
+            if (i != n - 1 && num != 0) {
+                sb.append(s1[num]).append(s2[n - 2 - i]);
+            } else {
+                // 如果有连续的两个零，只加一个零;如果num不是0，也加上去
+                if ((sb.length() > 1 && sb.charAt(sb.length() - 1) != '零') || num != 0) {
+                    sb.append(s1[num]);
+                }
+            }
+            // 处理特殊情况，如果在每个亿、万的部分末尾有零
+            // 例如14001400,不应该是一千四百零一千四百零，而是一千四百万一千四百
+            if (sb.charAt(sb.length() - 1) == '零' && (n - 2 - i == -1 || s2[n - 2 - i].equals("万") || s2[n - 2 - i].equals("亿"))){
+                sb.deleteCharAt(sb.length()-1);
+
+                //如果不是遍历到字符串最后，就加上对应的万或者亿
+                if (n-2-i != -1) {
+                    sb.append(s2[n - 2 - i]);
+                }
+            }
+        }
+        //如果还有小数部分
+        if (input.length>1) {
+            sb.append("点");
+
+            for (int i = 0;i < input[1].length();i++) {
+                int num = input[1].charAt(i) - '0';
+
+                sb.append(s1[num]);
+            }
+        }
+        return sb.toString();
     }
 }

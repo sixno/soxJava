@@ -1,9 +1,10 @@
 package com.sox.api.utils;
 
 /**
- * 无返回值回调，接受一个参数，大部分情况下够用
- * @param <T>
+ * 匿名回调
+ * 可使用内部类实现丰富的参数类型
  */
 public interface CallbackUtils<T> {
     void deal(T input) throws Exception;
 }
+

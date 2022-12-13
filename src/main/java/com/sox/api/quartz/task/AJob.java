@@ -3,6 +3,7 @@ package com.sox.api.quartz.task;
 import com.sox.api.model.TaskModel;
 import com.sox.api.quartz.utils.JobHelper;
 import com.sox.api.service.Com;
+import com.sox.api.service.Log;
 import org.quartz.DisallowConcurrentExecution;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
@@ -18,6 +19,9 @@ public class AJob implements Job {
     private Com com;
 
     @Autowired
+    private Log log;
+
+    @Autowired
     private TaskModel task_m;
 
     @Autowired
@@ -31,7 +35,7 @@ public class AJob implements Job {
 
         task_m.set_status(task_id, 0,  "1", "任务启动", com.time().toString());
 
-        System.out.println("Ii is a job, and received: " + arg.getOrDefault("message", "nothing") + " [" + com.date("yyyy-MM-dd HH:mm:ss.SSS z") + "]");
+        log.msg("Ii is a job, and received: " + arg.getOrDefault("message", "nothing"), 5);
 
         task_m.set_status(task_id, 0,  "0", "任务完成");
     }

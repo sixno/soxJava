@@ -1,6 +1,7 @@
 package com.sox.api.controller;
 
 import com.sox.api.interceptor.CheckLogin;
+import com.sox.api.model.CodeModel;
 import com.sox.api.model.IndexModel;
 import com.sox.api.model.TableModel;
 import com.sox.api.service.Api;
@@ -39,26 +40,33 @@ public class TableController {
     private IndexModel index_m;
 
     @Autowired
+    private CodeModel code_m;
+
+    @Autowired
     private SqlController sql_c;
 
-    private boolean allow(String table) {
-        String allow_tables = "base_ledger,base_credit,base_fund";
+    private boolean deny(String table) {
+        List<Map<String, String>> list = code_m.state_list("base_table", 0);
 
-        return ("," + allow_tables + ",").contains("," + table + ",");
+        for (Map<String, String> item : list) {
+            if (item.get("value").equals(table)) return false;
+        }
+
+        return true;
     }
 
     @RequestMapping("/list")
-    public Map<String, Object> list() {
+    public Api.Res list() {
         Map<String, Object> dict = new LinkedHashMap<>();
 
         dict.put("data_date", "");
 
-        String query = api.json("query");
-        String table = api.json("table");
+        String query = api.arg("query");
+        String table = api.arg("table");
 
         if (!query.equals("")) {
-            String data_date = api.json("data_date");
-            String dept = api.json("dept_no", index_m.summary_dept_no);
+            String data_date = api.arg("data_date");
+            String dept = api.arg("dept_no", index_m.summary_dept_no);
 
             String[] forbidden = {"insert ", " update ", "delete ", "drop "};
 
@@ -77,13 +85,13 @@ public class TableController {
             query = query.replace("@data_date", data_date).replace("@which_dept", dept.equals(index_m.summary_dept_no) ? "" : " AND " + index_m.db.key_esc("dept_no") + "='" + index_m.db.escape(dept) + "' ");
         }
 
-        if(query.equals("") && !this.allow(table)) return api.err("当前数据表禁止查看");
+        if(query.equals("") && this.deny(table)) return api.err("当前数据表禁止查看");
 
-        Map<String, Object> map = com.map(api.json(), "table");
+        Map<String, Object> map = com.map(api.arg(), "table");
 
         map.put("#table", table);
 
-        Map<String, Long> line = api.line(20);
+        Api.Line line = api.line(20);
 
         if (query.equals("") && map.getOrDefault("data_date", "").equals("latest")) {
             String latest_date = table_m.db.table("data_date").field("date", "date,desc");
@@ -94,20 +102,22 @@ public class TableController {
         }
 
         if (query.equals("")) {
-            if (line.get("rows") == 0) line.put("rows", table_m.list_count(map));
+            if (line.rows == 0) line.rows = table_m.list_count(map);
         } else {
-            if (line.get("rows") == 0) {
+            if (line.rows == 0) {
                 String rows = table_m.db.single("SELECT COUNT(*) FROM (" + query + ") " + table_m.db.key_esc("__T"));
 
                 if (rows.equals("")) return api.err("查询语句有错误，请在”指标管理 - 指标维护“中检查");
 
-                line.put("rows", Long.parseLong(rows));
+                line.rows = Long.parseLong(rows);
             }
         }
 
-        if (line.get("page") == 0) line.put("page", (long)Math.ceil((double)line.get("rows") / (double)line.get("size")));
+        if (line.page == 0) line.page = api.page(line);
 
-        map.put("#limit", line.get("size") + "," + ((line.get("page") - 1) * line.get("size")));
+        api.set_line(line);
+
+        map.put("#limit", line);
 
         map.put("#order", "id,asc");
 
@@ -118,10 +128,8 @@ public class TableController {
         if (query.equals("")) {
             list = table_m.db.table(table).read(map);
         } else {
-            list = table_m.db.result(query, line.get("size"), (line.get("page") - 1) * line.get("size"));
+            list = table_m.db.result(query, line.size, (line.page - 1) * line.size);
         }
-
-        api.set_line(line);
 
         if (list.size() > 0) {
             Map<String, Object> list_map = new LinkedHashMap<>();
@@ -147,21 +155,21 @@ public class TableController {
     }
 
     @RequestMapping("/field_list")
-    public Map<String, Object> field_list() {
+    public Api.Res field_list() {
         this.get_field_list();
 
-        Map<String, Object> map = com.map(api.json());
+        Map<String, Object> map = com.map(api.arg());
 
         map.put("#table", "set_base_field");
 
-        Map<String, Long> line = api.line(20);
+        Api.Line line = api.line(20);
 
-        if (line.get("rows") == 0) line.put("rows", table_m.list_count(map));
-        if (line.get("page") == 0) line.put("page", (long)Math.ceil((double)line.get("rows") / (double)line.get("size")));
+        if (line.rows == 0) line.rows = table_m.list_count(map);
+        if (line.page == 0) line.page = api.page(line);
 
         api.set_line(line);
 
-        map.put("#limit", line.get("size") + "," + ((line.get("page") - 1) * line.get("size")));
+        map.put("#limit", line);
 
         map.put("#order", "sort,asc;id,asc");
 
@@ -175,28 +183,28 @@ public class TableController {
     }
 
     @RequestMapping("/get_field_list")
-    public Map<String, Object> get_field_list() {
-        String table = api.json("table");
+    public Api.Res get_field_list() {
+        String table = api.arg("table");
 
-        if(!this.allow(table)) return api.err("当前数据表禁止查看");
+        if(this.deny(table)) return api.err("当前数据表禁止查看");
 
         List<Map<String, String>> field_list_1 = table_m.db.table("set_base_field").read("*", "sort,asc;id,asc", "table", table);
 
         List<Map<String, String>> field_list_2 = table_m.db.cols_map(table);
 
-         for (Map<String, String> field_item_1 : field_list_1) {
-             boolean del = true;
+        for (Map<String, String> field_item_1 : field_list_1) {
+            boolean del = true;
 
-             for (Map<String, String> field_item_2 : field_list_2) {
-                 if (field_item_1.get("name").equals(field_item_2.get("column_name"))) {
-                     del = false;
+            for (Map<String, String> field_item_2 : field_list_2) {
+                if (field_item_1.get("name").equals(field_item_2.get("column_name"))) {
+                    del = false;
 
-                     break;
-                 }
-             }
+                    break;
+                }
+            }
 
-             if (del) table_m.db.table("set_base_field").delete(field_item_1.get("id"));
-         }
+            if (del) table_m.db.table("set_base_field").delete(field_item_1.get("id"));
+        }
 
         for (Map<String, String> field_item_2 : field_list_2) {
             boolean add = true;
@@ -234,15 +242,15 @@ public class TableController {
     }
 
     @RequestMapping("/set_base_field")
-    public Map<String, Object> set_base_field() {
-        String base_field_id = api.json("base_field_id");
+    public Api.Res set_base_field() {
+        String base_field_id = api.arg("base_field_id");
 
         Map<String, String> data = new LinkedHashMap<>();
 
-        for (String key : api.json().keySet()) {
+        for (String key : api.arg().keySet()) {
             if (key.equals("base_field_id")) continue;
 
-            data.put(key, api.json(key));
+            data.put(key, api.arg(key));
         }
 
         if (table_m.db.table("set_base_field").update(base_field_id, data) > 0) {
@@ -253,14 +261,14 @@ public class TableController {
     }
 
     @RequestMapping("/report_form_list")
-    public Map<String, Object> report_form_list() {
+    public Api.Res report_form_list() {
         return sql_c.query("select * from report_form order by id desc");
     }
 
     @RequestMapping("/report_form_import")
-    public Map<String, Object> report_form_import(String date, String file) {
-        if (date == null) date = api.json("date");
-        if (file == null) file = api.json("file");
+    public Api.Res report_form_import(String date, String file) {
+        if (date == null) date = api.arg("date");
+        if (file == null) file = api.arg("file");
 
         if (!check.required(file) || !(new File(file)).isFile()) return api.err("数据文件不存在");
 
@@ -276,15 +284,15 @@ public class TableController {
         final Map<Integer, String> cols = new LinkedHashMap<>();
         final Map<Integer, String> unit = new LinkedHashMap<>();
 
-        poi.read_xls(file, 0, (line, line_no) -> {
-            if (line_no == -1) {
-                info.put("en_name", line.get(0));
+        poi.read_xlsx(file, 0, (Poi.XSSFLine line) -> {
+            if (line.row_no == -1) {
+                info.put("en_name", line.data.get(0));
             }
 
             System.out.println("======");
 
-            for (int cell_no : line.keySet()) {
-                System.out.println(line.get(cell_no));
+            for (int cell_no : line.data.keySet()) {
+                System.out.println(line.data.get(cell_no));
             }
 
             System.out.println("======");

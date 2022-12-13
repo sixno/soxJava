@@ -24,8 +24,6 @@ public class EsModel {
     private final Curl.Resolver<Map<String, Object>> jsonResolver = (httpCode, responseBody) -> {
         String json_str = new String(responseBody, StandardCharsets.UTF_8);
 
-        System.out.println(json_str);
-
         return JSONObject.parseObject(json_str);
     };
 

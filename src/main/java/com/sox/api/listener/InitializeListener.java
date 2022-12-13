@@ -65,10 +65,10 @@ public class InitializeListener implements ApplicationListener<ApplicationStarte
                 host_ip = com.net_addr();
             }
 
-            System.out.println("It is currently distributed deployment mode...");
-            System.out.println("host_id: " + host_id);
-            System.out.println("host_ip: " + host_ip);
-            System.out.println("port: " + port);
+            log.msg("It is currently distributed deployment mode...", 0);
+            log.msg("host_id: " + host_id, 0);
+            log.msg("host_ip: " + host_ip, 0);
+            log.msg("port: " + port, 0);
 
             // 在主机列表中注册自身
 

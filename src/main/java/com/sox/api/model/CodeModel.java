@@ -1,5 +1,6 @@
 package com.sox.api.model;
 
+import com.alibaba.fastjson.JSON;
 import com.sox.api.service.Com;
 import com.sox.api.service.Db;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,9 @@ import java.util.*;
 
 @Component
 public class CodeModel {
+    @Autowired
+    public RecycleBinModel recycle_bin_m;
+
     @Autowired
     public Com com;
 
@@ -61,57 +65,107 @@ public class CodeModel {
     }
 
     public String state(String index, String value, int level, String... def) {
+        // 虚拟码值
+        // level: -1
+        // index: 表名称
+        // value: 查询条件，不指明字段名默认id
+        // def 0:释义字段 1:默认值 2:查询字段，默认为id
         if (value.equals("")) return def.length == 0 ? "" : def[0];
 
-        Map<String, String> def_map = new LinkedHashMap<>();
+        if (level != -1) {
+            Map<String, String> def_map = new LinkedHashMap<>();
 
-        def_map.put("state", def.length == 0 ? "" : def[0]);
-        def_map.put("prev", "");
+            def_map.put("state", def.length == 0 ? "" : def[0]);
+            def_map.put("prev", "");
 
-        String key = this.state_ini(index, level);
+            String key = this.state_ini(index, level);
 
-        return state.get(key).getOrDefault(value, def_map).get("state");
+            return state.get(key).getOrDefault(value, def_map).get("state");
+        } else {
+            if (def.length == 0) return "";
+
+            return db.table(index).field(def[0], def.length > 2 ? def[2] : "id", value, "#value", def.length > 1 ? def[1] : "");
+        }
     }
 
     public List<Map<String, String>> state_list(String index, int level, String... prev) {
+        // 虚拟码值
+        // level: -1
+        // index: 表名称
+        // prev: 0 => value字段|state字段|... 1 => 查询条件，以“|”隔开
         List<Map<String, String>> screen_result = new ArrayList<>();
 
-        if (index.equals("")) return screen_result;
+        if (level != -1) {
+            if (index.equals("")) return screen_result;
 
-        String key = this.state_ini(index, level);
+            String key = this.state_ini(index, level);
 
-        Map<String, Map<String, String>> result = state.get(key);
+            Map<String, Map<String, String>> result = state.get(key);
 
-        List<Map.Entry<String, Map<String, String>>> list = new ArrayList<>(result.entrySet());
+            List<Map.Entry<String, Map<String, String>>> list = new ArrayList<>(result.entrySet());
 
-        list.sort(Comparator.comparing(o -> Float.parseFloat(o.getValue().get("sort")))); // 升序排列
+            list.sort(Comparator.comparing(o -> Float.parseFloat(o.getValue().get("sort")))); // 升序排列
 
-        for (Map.Entry<String,  Map<String, String>> mapping : list) {
-            Map<String, String> code_state = mapping.getValue();
+            for (Map.Entry<String,  Map<String, String>> mapping : list) {
+                Map<String, String> code_state = mapping.getValue();
 
-            code_state.put("value", mapping.getKey());
+                code_state.put("value", mapping.getKey());
 
-            boolean prev_0 = true;
-            boolean prev_1 = true;
+                boolean prev_0 = true;
+                boolean prev_1 = true;
 
-            if (prev.length > 0 && !prev[0].equals("")) {
-                for (String code_prev : code_state.get("prev").split("\\|")) {
-                    prev_0 = ("|" + prev[0] + "|").contains("|" + code_prev + "|") || code_prev.equals("");
+                if (prev.length > 0 && !prev[0].equals("")) {
+                    if (!code_state.get("prev").startsWith("!")) {
+                        for (String code_prev : code_state.get("prev").split("\\|")) {
+                            prev_0 = ("|" + prev[0] + "|").contains("|" + code_prev + "|") || code_prev.equals("");
 
-                    if (prev_0) break;
+                            if (prev_0) break;
+                        }
+                    } else {
+                        for (String code_prev : code_state.get("prev").substring(1).split("\\|")) {
+                            prev_0 = ("|" + prev[0] + "|").contains("|" + code_prev + "|") || code_prev.equals("");
+
+                            if (prev_0) break;
+                        }
+
+                        prev_0 = !prev_0;
+                    }
+                }
+
+                if (prev.length > 1 && !prev[1].equals("")) {
+                    for (String code_extra : code_state.get("extra").split("\\|")) {
+                        prev_1 = ("|" + prev[1] + "|").contains("|" + code_extra + "|");
+
+                        if (prev_1) break;
+                    }
+                }
+
+                if (prev_0 && prev_1) {
+                    screen_result.add(code_state);
                 }
             }
+        } else {
+            String[] filter = prev.length > 0 ? prev[0].split("\\|") : new String[0];
 
-            if (prev.length > 1 && !prev[1].equals("")) {
-                for (String code_extra : code_state.get("extra").split("\\|")) {
-                    prev_1 = ("|" + prev[1] + "|").contains("|" + code_extra + "|");
+            String[] condition = prev.length > 1 ? prev[1].split("\\|") : new String[0];
 
-                    if (prev_1) break;
-                }
-            }
+            if (filter.length == 0) return screen_result;
 
-            if (prev_0 && prev_1) {
-                screen_result.add(code_state);
+            List<Map<String, String>> list = db.table(index).read("*", condition);
+
+            for (int i = 0;i < list.size();i++) {
+                Map<String, String> item = list.get(i);
+
+                Map<String, String> code_item = new LinkedHashMap<>();
+
+                code_item.put("value", item.get(filter[0]));
+                code_item.put("state", filter.length > 1 ? item.get(filter[1]) : "");
+                code_item.put("extra", filter.length > 2 ? item.get(filter[2]) : "");
+
+                code_item.put("prev", filter.length > 3 ? (filter[3].startsWith("*") ? filter[3].substring(1) : item.get(filter[3])) : "");
+                code_item.put("sort", i + "");
+
+                screen_result.add(code_item);
             }
         }
 
@@ -240,13 +294,22 @@ public class CodeModel {
         return result;
     }
 
-    public Long del(String code_id) {
-        Map<String, String> code = db.find("index,level", "id", code_id);
+    public Long del(String id, String... user_id) {
 
-        Long result = db.delete(code_id);
+        Map<String, String> data = this.db.find("*", id);
 
-        if (result > 0 && code != null) {
-            this.clean(code.get("index") + "_0", code.get("index") + "_" + code.getOrDefault("level", "1"));
+        Long result = db.delete(id);
+
+        if (result > 0) {
+            this.clean(data.get("index") + "_0", data.get("index") + "_" + data.getOrDefault("level", "1"));
+
+            Map<String, String> delete_data = new LinkedHashMap<>();
+
+            delete_data.put("table_name", this.db.table);
+            delete_data.put("still_data", JSON.toJSONString(data));
+            delete_data.put("handler", user_id.length > 0 ? user_id[0] : "0");
+
+            recycle_bin_m.add(delete_data);
         }
 
         return result;

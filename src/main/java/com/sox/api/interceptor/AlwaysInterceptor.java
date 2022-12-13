@@ -3,6 +3,7 @@ package com.sox.api.interceptor;
 import com.sox.api.service.Api;
 import com.sox.api.service.Com;
 import com.sox.api.service.Log;
+import org.apache.tomcat.util.http.fileupload.servlet.ServletFileUpload;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -12,9 +13,7 @@ import org.springframework.web.servlet.ModelAndView;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.net.URLDecoder;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.io.BufferedReader;
 
 public class AlwaysInterceptor implements HandlerInterceptor {
     @Autowired
@@ -26,11 +25,49 @@ public class AlwaysInterceptor implements HandlerInterceptor {
     @Autowired
     private Log log;
 
-    long start = System.currentTimeMillis();
+    long start;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         start = System.currentTimeMillis();
+
+        // 缓存请求和响应
+        com.http_request.set(request);
+        com.http_response.set(response);
+
+        // 初始化请求参数
+        com.http_g_str.set("");
+        com.http_p_str.set("");
+        com.http_j_str.set("");
+
+        if (request.getQueryString() != null) {
+            com.http_g_str.set(request.getQueryString());
+        }
+
+        // 非文件上传请求
+        if(!ServletFileUpload.isMultipartContent(request)) {
+            StringBuilder bodyString = new StringBuilder();
+
+            try {
+                BufferedReader bufferReader = new BufferedReader(request.getReader());
+
+                String line;
+
+                while ((line = bufferReader.readLine()) != null) {
+                    bodyString.append(line);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            if (!bodyString.toString().equals("")) {
+                if (bodyString.toString().startsWith("{")) {
+                    com.http_j_str.set(bodyString.toString());
+                } else {
+                    com.http_p_str.set(bodyString.toString());
+                }
+            }
+        }
 
         // 跨域设置，token暴露
         response.setHeader("Access-Control-Allow-Origin", request.getHeader("Origin"));
@@ -123,23 +160,19 @@ public class AlwaysInterceptor implements HandlerInterceptor {
 
     @Override
     public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView mav) {
-        api.req.remove();
-        api.res.remove();
+        log.msg("[" + request.getRequestURI() + "] Response time: " + (System.currentTimeMillis() - start) + "ms" +
+                (com.http_g_str.get().equals("") ? "" : " get: " + com.http_g_str.get()) +
+                (com.http_p_str.get().equals("") ? "" : " post: " + com.http_p_str.get()) +
+                (com.http_j_str.get().equals("") ? "" : " json: " + com.http_j_str.get()), 1);
 
-        com.http_get.remove();
-        com.http_post.remove();
+        api.res.set(new Api.Res());
 
-        String queryString = request.getQueryString();
+        com.http_request.remove();
+        com.http_response.remove();
 
-        if (queryString != null) {
-            try {
-                queryString = URLDecoder.decode(queryString, "UTF-8");
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        log.msg("[" + request.getRequestURI() + (queryString == null ? "" : "?" + queryString) + "] Response time: " + (System.currentTimeMillis() - start) + "ms", 1);
+        com.http_arg_g.remove();
+        com.http_arg_p.remove();
+        com.http_arg_j.remove();
     }
 
     @Override

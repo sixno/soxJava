@@ -6,6 +6,7 @@ import com.sox.api.model.ConfModel;
 import com.sox.api.model.IndexModel;
 import com.sox.api.model.UserModel;
 import com.sox.api.service.Api;
+import com.sox.api.service.Check;
 import com.sox.api.service.Com;
 import com.sox.api.service.Img;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,9 @@ public class CommonController {
     private Img img;
 
     @Autowired
+    private Check check;
+
+    @Autowired
     private CodeModel code_m;
 
     @Autowired
@@ -64,7 +68,7 @@ public class CommonController {
     private ResourceLoader resourceLoader;
 
     @RequestMapping("/time")
-    public Map<String, Object> time() {
+    public Api.Res time() {
         Map<String, Object> data = new LinkedHashMap<>();
 
         data.put("time",Long.toString(System.currentTimeMillis() / 1000L));
@@ -73,7 +77,7 @@ public class CommonController {
     }
 
     @RequestMapping("/date_list")
-    public Map<String, Object> date_list() {
+    public Api.Res date_list() {
         List<Map<String, String>> list = user_m.db.table("data_date").read("id,date", "date,desc");
 
         return api.put(list);
@@ -81,7 +85,7 @@ public class CommonController {
 
     @CheckLogin
     @RequestMapping("/init")
-    public Map<String, Object> init() {
+    public Api.Res init() {
         // 本接口返回用户登录后界面初始化数据
         // 本接口为数据聚合接口，提供强一致性接口数据
         Map<String, Object> user_auth = user_c.get_auth();
@@ -97,7 +101,7 @@ public class CommonController {
 
     @CheckLogin
     @RequestMapping("/home")
-    public Map<String, Object> home() {
+    public Api.Res home() {
         // 本接口返回用户登录后首页初始化数据
         // 本接口为数据聚合接口，提供强一致性接口数据
         Map<String, Object> data = new LinkedHashMap<>();
@@ -131,7 +135,9 @@ public class CommonController {
 
     @CheckLogin
     @RequestMapping(value = "/upload", method = RequestMethod.POST)
-    public Map<String, Object> upload(@RequestParam("file") MultipartFile file) {
+    public Api.Res upload(@RequestParam("file") MultipartFile file) {
+        int tag = 0;
+
         String user_id = user_m.get_session("id");
 
         if (file.isEmpty()) return api.err("未检测到文件流");
@@ -149,6 +155,8 @@ public class CommonController {
                 sub_dir = "cover" + File.separator;
                 break;
             case "kettle":
+                tag = 1;
+
                 sub_dir = "kettle" + File.separator;
                 break;
         }
@@ -214,7 +222,35 @@ public class CommonController {
 
         result.put("client_name", raw_file_name);
 
+        // 如果不是临时文件则记录
+        if(!step.equals("temp")) com.add_upload_record(tag, result.get("file"), file_name, upload_dir + File.separator + sub_dir + file_name, user_id);
+
         return api.put(result);
+    }
+
+    @CheckLogin
+    @RequestMapping("/upload_list")
+    public Api.Res upload_list() {
+        Map<String, Object> map = com.map(api.arg());
+
+        Api.Line line = api.line(20);
+
+        if (line.rows == 0) line.rows = conf_m.db.table("file_upload").count(map);
+        if (line.rows == 0) line.page = api.page(line);
+
+        api.set_line(line);
+
+        map.put("#limit", line);
+
+        map.put("#order", "id,desc");
+
+        List<Map<String, String>> list = conf_m.db.table("file_upload").read(map);
+
+        if (list.size() > 0) {
+            return api.put(list);
+        } else {
+            return api.err("没有数据");
+        }
     }
 
     @RequestMapping("/file/**")
@@ -239,6 +275,121 @@ public class CommonController {
             e.printStackTrace();
 
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    @RequestMapping("/sort")
+    public Api.Res sort() {
+        Map<String, String> data = api.arg();
+
+        check.reset(data);
+
+        check.validate("table", "表名", "required");
+        check.validate("scope", "范围", "required", "@@NULL"); // 为 null 时忽略必填
+        check.validate("major", "数据主键", "required");
+
+        if (check.result.get()) {
+            String prev = data.getOrDefault("prev", "");
+            String next = data.getOrDefault("next", "");
+            String sort = data.getOrDefault("sort", "");
+            // String desc = data.getOrDefault("desc", "0");
+
+            if (prev.equals("") && next.equals("")) return api.err("操作失败");
+
+            if (sort.equals("")) sort = "sort";
+
+            Map<String, String> curr_data = user_m.db.table(data.get("table")).find("*", "id", data.get("major"));
+
+            Map<String, String> prev_data = user_m.db.table(data.get("table")).find("*", "id", prev);
+            Map<String, String> next_data = user_m.db.table(data.get("table")).find("*", "id", next);
+
+            Map<String, Object> scope = new LinkedHashMap<>();
+
+            if (data.get("scope") != null) {
+                String[] scope_arr = data.get("scope").split(",");
+
+                for (int i = 0;i < scope_arr.length;i += 2) {
+                    if (i > scope_arr.length - 2) break;
+
+                    scope.put(scope_arr[i], scope_arr[i + 1]);
+                }
+            }
+
+            if (prev_data.size() == 0) {
+                Map<String, Object> prev_map = new LinkedHashMap<>(scope);
+
+                prev_map.put("not_in#id", next_data.get("id") + "," + curr_data.get("id"));
+                prev_map.put(sort + " <=", next_data.get(sort));
+                prev_map.put("#order", sort + ",desc;id,desc");
+
+                prev_data = user_m.db.table(data.get("table")).find(prev_map);
+            }
+
+            if (next_data.size() == 0) {
+                Map<String, Object> next_map = new LinkedHashMap<>(scope);
+
+                next_map.put("not_in#id", prev_data.get("id") + "," + curr_data.get("id"));
+                next_map.put(sort + " >=", prev_data.get(sort));
+                next_map.put("#order", sort + ",asc;id,asc");
+
+                next_data = user_m.db.table(data.get("table")).find(next_map);
+            }
+
+            if (prev_data.size() == 0 && next_data.size() == 0) return api.err("操作失败");
+
+            if (prev_data.size() == 0) {
+                Map<String, Object> update_map = new LinkedHashMap<>(scope);
+
+                int next_sort = Integer.parseInt(next_data.get("sort"));
+
+                if (next_sort <= 1) {
+                    user_m.db.table(data.get("table")).update(1, "id", curr_data.get("id"), sort, "1");
+
+                    update_map.put("id !=", curr_data.get("id"));
+
+                    String finalSort = sort;
+                    user_m.db.table(data.get("table")).increase(update_map, new LinkedHashMap<String, String>(){{
+                        put(finalSort, (2 - next_sort) + "");
+                    }});
+                } else {
+                    user_m.db.table(data.get("table")).update(1, "id", curr_data.get("id"), sort, (next_sort - 1) + "");
+                }
+            } else if (next_data.size() == 0) {
+                int prev_sort = Integer.parseInt(prev_data.get("sort"));
+
+                user_m.db.table(data.get("table")).update(1, "id", curr_data.get("id"), sort, (prev_sort + 1) + "");
+            } else {
+                Map<String, Object> update_map = new LinkedHashMap<>(scope);
+
+                int prev_sort = Integer.parseInt(prev_data.get("sort"));
+                int next_sort = Integer.parseInt(next_data.get("sort"));
+
+                if (next_sort - prev_sort <= 1) {
+                    user_m.db.table(data.get("table")).update(1, "id", curr_data.get("id"), sort, (prev_sort + 1) + "");
+
+                    update_map.put(sort + " >", next_sort);
+                    update_map.put("^1", "or (");
+                    update_map.put(sort, next_sort);
+                    update_map.put("id >=", next_data.get("id"));
+                    update_map.put("^2", ")");
+                    update_map.put("id !=", curr_data.get("id"));
+
+                    String finalSort = sort;
+                    user_m.db.table(data.get("table")).increase(update_map, new LinkedHashMap<String, String>(){{
+                        put(finalSort, (prev_sort + 2 - next_sort) + "");
+                    }});
+                } else {
+                    int delta = next_sort - prev_sort;
+
+                    user_m.db.table(data.get("table")).update(1, "id", curr_data.get("id"), sort, (prev_sort + (delta - delta % 2) / 2) + "");
+                }
+            }
+
+            return api.msg("操作成功");
+        } else {
+            api.res().err = check.errors.get();
+
+            return api.err(check.error.get());
         }
     }
 }

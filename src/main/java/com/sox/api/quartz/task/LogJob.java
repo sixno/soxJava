@@ -54,9 +54,9 @@ public class LogJob implements Job {
             long time = curr_time - last_time;
 
             // 60 * 1000
-            // Integer.parseInt(log_cls) * 24 * 60 * 60 * 1000
-            if (time > Integer.parseInt(log_cls) * 24 * 60 * 60 * 1000) {
-                if (!f_info.delete()) System.out.println("failed to delete old log file: " + f_info.getAbsolutePath());
+            // Long.parseLong(log_cls) * 24 * 60 * 60 * 1000
+            if (time > Long.parseLong(log_cls) * 24 * 60 * 60 * 1000) {
+                if (!f_info.delete()) log.msg("failed to delete old log file: " + f_info.getAbsolutePath(), 4);
             }
         }
     }

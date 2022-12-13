@@ -3,10 +3,9 @@ package com.sox.api.quartz.task;
 import com.sox.api.quartz.utils.JobHelper;
 import com.sox.api.service.Com;
 import com.sox.api.service.Db;
-import com.sox.api.utils.ConnectionUtils;
+import com.sox.api.service.Log;
 import org.quartz.DisallowConcurrentExecution;
 import org.quartz.Job;
-import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +30,9 @@ public class CleanJob implements Job {
     private Com com;
 
     @Autowired
+    private Log log;
+
+    @Autowired
     private Db db;
 
     @Autowired
@@ -50,12 +52,14 @@ public class CleanJob implements Job {
 
     // 关闭打开超过1个小时的空闲数据库连接
     private void close_idle_connection() {
-        for (int p_id : db.pool_use.keySet()) {
+        for (String p_id : db.pool_use.keySet()) {
             if (db.pool_use.get(p_id) != null && !db.pool_use.get(p_id)) {
-                ConnectionUtils connection = db.pool.get(p_id);
+                Db.Conn connection = db.pool.get(p_id);
 
                 if (com.time() - connection.time > 3600) {
-                    db.pool_use.put(connection.p_id, true); // 设置为正在使用，阻止其他地方调用
+                    String conn_p_id = connection.p_id + "";
+
+                    db.pool_use.put(conn_p_id, true); // 设置为正在使用，阻止其他地方调用
 
                     try {
                         connection.close();
@@ -65,13 +69,13 @@ public class CleanJob implements Job {
 
                     connection.conn = null;
 
-                    db.pool_use.put(connection.p_id, null);
+                    db.pool_use.put(conn_p_id, null);
                 }
             }
         }
     }
 
-    // 删除上传目录下临时文件
+    // 删除上传目录下临时文件中1天前的文件
     private void clean_upload_temp() {
         File dir = new File(com.path(upload_dir + File.separator + "temp"));
 
@@ -91,13 +95,15 @@ public class CleanJob implements Job {
             long time = curr_time - last_time;
 
             if (time > 24 * 60 * 60 * 1000) {
-                if (!f_info.delete()) System.out.println("failed to delete upload temp file: " + f_info.getAbsolutePath());
+                if (!f_info.delete()) log.msg("failed to delete upload temp file: " + f_info.getAbsolutePath(), 4);
             }
         }
     }
 
-    // 删除超过3天的数据文件
+    // 删除超过n天的数据文件
     private void  clean_data_file() {
+        if (dat_dir.equals("")) return;
+
         File dir = new File(com.path(dat_dir));
 
         File[] files = dir.listFiles();
@@ -114,9 +120,9 @@ public class CleanJob implements Job {
             long time = curr_time - last_time;
 
             // 60 * 1000
-            // Integer.parseInt(log_cls) * 24 * 60 * 60 * 1000
-            if (time > Integer.parseInt(dat_cls) * 24 * 60 * 60 * 1000) {
-                if (!f_info.delete()) System.out.println("failed to delete data file: " + f_info.getAbsolutePath());
+            // Long.parseLong(log_cls) * 24 * 60 * 60 * 1000
+            if (time > Long.parseLong(dat_cls) * 24 * 60 * 60 * 1000) {
+                if (!f_info.delete()) log.msg("failed to delete data file: " + f_info.getAbsolutePath(), 4);
             }
         }
     }
